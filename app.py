@@ -78,7 +78,7 @@ with st.sidebar:
         height=180,
         placeholder="Describe target roles, businesses, industries, problems, and exclusions.",
     )
-tab1, tab2, tab3 = st.tabs(["Analyze Lead", "Find Leads", "Discover Leads"])
+tab1, tab2 = st.tabs(["Analyze Lead", "Discover Leads"])
 
 
 with tab1:
@@ -124,73 +124,8 @@ Return:
             st.markdown(response.output_text)
 
 
+
 with tab2:
-    st.subheader("Find Relevant LinkedIn Leads")
-
-    industry = st.text_input(
-        "Target Industry",
-        placeholder="Example: dairy delivery, grocery subscription, wellness platform"
-    )
-
-    location = st.text_input(
-        "Target Location",
-        placeholder="Example: India, Bhopal, Denmark, USA"
-    )
-
-    business_type = st.text_input(
-        "Business Type",
-        placeholder="Example: subscription commerce, farm-to-customer, WooCommerce agency"
-    )
-
-    if st.button("Generate Lead Search Strategy"):
-        if not industry.strip() and not business_type.strip():
-            st.warning("Please enter at least Target Industry or Business Type.")
-        else:
-            prompt = f"""
-You are a LinkedIn business development research assistant for the user.
-
-User Profile:
-{user_profile}
-
-Ideal Leads:
-{ideal_leads}
-
-Target Industry:
-{industry}
-
-Target Location:
-{location}
-
-Business Type:
-{business_type}
-
-Create a practical lead-finding strategy.
-
-Do not suggest scraping or automation.
-
-Return:
-
-1. Best Company Types to Search
-2. Ideal Decision-Maker Roles
-3. LinkedIn Search Keywords
-4. Google Search Queries using site:linkedin.com
-5. Company Page Search Queries
-6. Profile Search Queries
-7. Signals That This Is a Good Lead
-8. Red Flags
-9. Suggested Outreach Angle
-10. Example Connection Message under 250 characters
-"""
-
-            response = client.responses.create(
-                model="gpt-4.1-mini",
-                input=prompt
-            )
-
-            st.markdown(response.output_text)
-
-
-with tab3:
     st.subheader("Discover Public Business Leads")
     st.write(
         "Discover product businesses, subscription businesses, delivery companies, and ecommerce brands that may benefit from WooCommerce, subscriptions, automation, and operational improvements."
