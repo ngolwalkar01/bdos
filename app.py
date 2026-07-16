@@ -7,9 +7,43 @@ from tavily import TavilyClient
 
 load_dotenv()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+st.set_page_config(page_title="LinkedIn BD Agent", layout="wide")
 
+
+def get_secret(name):
+    value = os.getenv(name)
+    if value:
+        return value
+
+    try:
+        return st.secrets.get(name)
+    except FileNotFoundError:
+        return None
+
+
+openai_api_key = get_secret("OPENAI_API_KEY")
+tavily_api_key = get_secret("TAVILY_API_KEY")
+
+missing_secrets = [
+    name
+    for name, value in {
+        "OPENAI_API_KEY": openai_api_key,
+        "TAVILY_API_KEY": tavily_api_key,
+    }.items()
+    if not value
+]
+
+if missing_secrets:
+    st.error(
+        "Missing required Streamlit secrets: " + ", ".join(missing_secrets)
+    )
+    st.info(
+        "Open Manage app > Settings > Secrets, add the missing keys, save, and reboot the app."
+    )
+    st.stop()
+
+client = OpenAI(api_key=openai_api_key)
+tavily_client = TavilyClient(api_key=tavily_api_key)
 
 
 def extract_json(text):
@@ -27,7 +61,6 @@ def extract_json(text):
     return text
 
 
-st.set_page_config(page_title="LinkedIn BD Agent", layout="wide")
 st.title("LinkedIn BD Agent")
 
 with st.sidebar:
