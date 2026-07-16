@@ -1,7 +1,8 @@
-streamlit
+streamlit[auth]
 openai
 python-dotenv
 tavily-python
 requests
 feedparser
 beautifulsoup4
+supabase

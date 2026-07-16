@@ -5,20 +5,14 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from tavily import TavilyClient
 
+from services.auth import auth_enabled, require_authenticated_user
+from services.config import get_secret
+from services.database import ensure_user
+from ui.protected_app import render_dashboard, render_onboarding_start
+
 load_dotenv()
 
 st.set_page_config(page_title="LinkedIn BD Agent", layout="wide")
-
-
-def get_secret(name):
-    value = os.getenv(name)
-    if value:
-        return value
-
-    try:
-        return st.secrets.get(name)
-    except FileNotFoundError:
-        return None
 
 
 openai_api_key = get_secret("OPENAI_API_KEY")
@@ -45,6 +39,23 @@ if missing_secrets:
 client = OpenAI(api_key=openai_api_key)
 tavily_client = TavilyClient(api_key=tavily_api_key)
 
+if auth_enabled():
+    identity = require_authenticated_user()
+
+    try:
+        app_user = ensure_user(identity)
+    except Exception as error:
+        st.error("Your account could not be connected to the application database.")
+        st.code(str(error))
+        if st.button("Log out"):
+            st.logout()
+        st.stop()
+
+    if app_user.get("onboarding_completed"):
+        render_dashboard(app_user)
+    else:
+        render_onboarding_start(app_user)
+    st.stop()
 
 def extract_json(text):
     text = text.strip()
