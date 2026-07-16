@@ -78,7 +78,7 @@ with st.sidebar:
         height=180,
         placeholder="Describe target roles, businesses, industries, problems, and exclusions.",
     )
-tab1, tab2 = st.tabs(["Analyze Lead", "Discover Leads"])
+tab1, tab2 = st.tabs(["Analyze Lead", "Business Discovery"])
 
 
 with tab1:
@@ -156,7 +156,7 @@ with tab2:
         value=5
     )
 
-    if st.button("Discover Leads"):
+    if st.button("Business Discovery"):
         if not discovery_industry.strip() and not discovery_business_type.strip():
             st.warning("Please enter at least Industry or Business Type.")
         else:
