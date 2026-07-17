@@ -416,7 +416,9 @@ div[data-testid="stFormSubmitButton"] button[kind="primary"] span {
 
 .st-key-google_login button p,
 .st-key-google_login button span {
+    margin: 0 !important;
     color: #1f1f1f !important;
+    line-height: 1 !important;
 }
 
 .st-key-google_login button::before {
