@@ -458,6 +458,14 @@ div[data-testid="stFormSubmitButton"] button[kind="primary"] span {
 [data-testid="stHeadingWithActionElements"] a {
     display: none !important;
 }
+
+button[data-testid="stBaseButton-primary"] p,
+button[data-testid="stBaseButton-primary"] span,
+button[data-testid="stBaseButton-primaryFormSubmit"] p,
+button[data-testid="stBaseButton-primaryFormSubmit"] span {
+    margin: 0 !important;
+    color: #ffffff !important;
+}
 </style>
 """
 
