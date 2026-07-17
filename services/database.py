@@ -191,6 +191,31 @@ def save_communication_style(user_id, style):
     return response.data[0]
 
 
+
+def get_business_dna_profile(user_id):
+    response = (get_database_client().table("business_dna_profiles").select("*")
+        .eq("user_id", user_id).limit(1).execute())
+    return response.data[0] if response.data else {}
+
+
+def save_business_dna_profile(user_id, profile, knowledge_documents):
+    response = (get_database_client().table("business_dna_profiles")
+        .upsert({"user_id": user_id, "profile": profile, "knowledge_documents": knowledge_documents},
+                on_conflict="user_id").select("*").execute())
+    if not response.data:
+        raise RuntimeError("The Business DNA profile could not be saved.")
+    return response.data[0]
+
+
+def complete_onboarding(user_id):
+    response = (get_database_client().table("users")
+        .update({"onboarding_step": 7, "onboarding_completed": True})
+        .eq("id", user_id).execute())
+    if not response.data:
+        raise RuntimeError("Onboarding could not be completed.")
+    return response.data[0]
+
+
 def advance_onboarding(user_id, step):
     response = (
         get_database_client()

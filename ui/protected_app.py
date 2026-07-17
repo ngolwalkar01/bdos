@@ -1,3 +1,5 @@
+import json
+
 from urllib.parse import urlparse
 from zoneinfo import available_timezones
 
@@ -5,13 +7,16 @@ import streamlit as st
 
 from services.database import (
     advance_onboarding,
+    complete_onboarding,
     get_basic_profile,
+    get_business_dna_profile,
     get_business_experience,
     get_communication_style,
     get_decision_maker_preferences,
     get_opportunity_preferences,
     get_professional_experience,
     save_basic_profile,
+    save_business_dna_profile,
     save_business_experience,
     save_communication_style,
     save_decision_maker_preferences,
@@ -748,6 +753,117 @@ def render_communication_style(user, existing):
         st.code(str(error))
 
 
+
+DNA_FIELDS = [
+    ("identity", "Identity"), ("experience", "Experience"), ("skills", "Skills"),
+    ("industries", "Industries"), ("business_problems_solved", "Business Problems Solved"),
+    ("ideal_opportunities", "Ideal Opportunities"), ("ideal_companies", "Ideal Companies"),
+    ("ideal_decision_makers", "Ideal Decision Makers"), ("writing_style", "Writing Style"),
+    ("strengths", "Strengths"), ("weaknesses", "Development Areas"),
+    ("recommended_positioning", "Recommended Positioning"),
+]
+
+
+def parse_ai_json(text):
+    fence = chr(96) * 3
+    value = text.strip()
+    if value.startswith(fence + "json"):
+        value = value[7:]
+    elif value.startswith(fence):
+        value = value[3:]
+    if value.endswith(fence):
+        value = value[:-3]
+    return json.loads(value.strip())
+
+
+def render_dna_value(value):
+    if isinstance(value, list):
+        st.markdown("\n".join(f"- {item}" for item in value) or "Not specified")
+    else:
+        st.write(value or "Not specified")
+
+
+def build_knowledge_documents(profile, source):
+    def bullets(values):
+        return "\n".join(f"- {value}" for value in (values or [])) or "- Not specified"
+    return {
+        "user_profile.md": f"# User Profile\n\n## Identity\n{profile.get('identity', '')}\n\n## Experience\n{profile.get('experience', '')}\n\n## Positioning\n{profile.get('recommended_positioning', '')}",
+        "business_dna.md": f"# Business DNA\n\n## Problems Solved\n{profile.get('business_problems_solved', '')}\n\n## Strengths\n{bullets(profile.get('strengths'))}\n\n## Development Areas\n{bullets(profile.get('weaknesses'))}",
+        "skills.md": f"# Skills\n\n{bullets(source['professional'].get('primary_skills'))}\n\n{profile.get('skills', '')}",
+        "industries.md": f"# Industries\n\n{bullets(source['business'].get('industries'))}\n\n{profile.get('industries', '')}",
+        "ideal_opportunities.md": f"# Ideal Opportunities\n\n{profile.get('ideal_opportunities', '')}",
+        "ideal_clients.md": f"# Ideal Clients\n\n{profile.get('ideal_companies', '')}",
+        "decision_makers.md": f"# Decision Makers\n\n{profile.get('ideal_decision_makers', '')}",
+        "writing_style.md": f"# Writing Style\n\n{profile.get('writing_style', '')}",
+        "case_studies.md": f"# Case Study Directions\n\n{bullets(profile.get('case_study_directions'))}",
+        "value_propositions.md": f"# Value Propositions\n\n{bullets(profile.get('value_propositions'))}",
+    }
+
+
+def generate_business_dna(client, source):
+    prompt = """You are a senior business-positioning strategist. Build an accurate Business DNA
+using only the onboarding data below. Never invent employers, clients, revenue, outcomes,
+certifications, or case-study facts.
+
+DATA:
+%s
+
+Return only valid JSON with exactly these keys:
+identity, experience, skills, industries, business_problems_solved, ideal_opportunities,
+ideal_companies, ideal_decision_makers, writing_style, recommended_positioning as concise
+strings; strengths, weaknesses, case_study_directions, value_propositions as arrays of
+3-5 concise items. Weaknesses must be constructive positioning gaps.
+""" % json.dumps(source, indent=2, default=str)
+    response = client.responses.create(model="gpt-4.1-mini", input=prompt)
+    profile = parse_ai_json(response.output_text)
+    missing = [key for key, _ in DNA_FIELDS if key not in profile]
+    if missing:
+        raise RuntimeError("AI response omitted: " + ", ".join(missing))
+    return profile
+
+
+def render_business_dna_review(user, source, existing, client):
+    st.markdown('<span class="bdos-eyebrow">Step 7 of 7</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="bdos-page-heading" style="font-size:2.15rem">Review your Business DNA</h2>', unsafe_allow_html=True)
+    st.markdown('<p class="bdos-page-copy">Review the positioning intelligence generated from your onboarding answers before entering the dashboard.</p>', unsafe_allow_html=True)
+    profile = existing.get("profile") or {}
+    label = "Regenerate Business DNA" if profile else "Generate Business DNA"
+    if st.button(label, type="secondary" if profile else "primary", use_container_width=True):
+        try:
+            with st.spinner("Turning your experience into a focused Business DNA..."):
+                profile = generate_business_dna(client, source)
+                documents = build_knowledge_documents(profile, source)
+                save_business_dna_profile(user["id"], profile, documents)
+            st.rerun()
+        except Exception as error:
+            st.error("Your Business DNA could not be generated.")
+            st.code(str(error))
+            return
+    if not profile:
+        st.info("Generate your Business DNA to review and complete onboarding.")
+        return
+    columns = st.columns(2)
+    for index, (key, label) in enumerate(DNA_FIELDS):
+        with columns[index % 2]:
+            with st.container(border=True):
+                st.markdown(f"#### {label}")
+                render_dna_value(profile.get(key))
+    documents = existing.get("knowledge_documents") or build_knowledge_documents(profile, source)
+    with st.expander("Generated knowledge files"):
+        st.caption("These private documents are stored in your application database.")
+        for filename, content in documents.items():
+            with st.expander(filename):
+                st.markdown(content)
+    st.info("Use Review & edit above to change source information, then regenerate.")
+    if st.button("Accept & Continue to Dashboard", type="primary", use_container_width=True):
+        try:
+            complete_onboarding(user["id"])
+            st.rerun()
+        except Exception as error:
+            st.error("Onboarding could not be completed.")
+            st.code(str(error))
+
+
 def render_review_menu(completed_steps):
     if completed_steps < 1:
         return
@@ -831,7 +947,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_communication_style"] = True
                 st.rerun()
 
-def render_onboarding(user):
+def render_onboarding(user, openai_client=None):
     current_step = int(user.get("onboarding_step") or 0)
     editing_basic = st.session_state.get("edit_basic_profile", False)
     editing_professional = st.session_state.get(
@@ -954,13 +1070,24 @@ def render_onboarding(user):
                                 st.session_state["edit_communication_style"] = False
                                 st.rerun()
                         else:
-                            with st.container(key="coming_soon_card"):
-                                st.markdown(
-                                    '<span class="bdos-eyebrow">Step 7 of 7</span>',
-                                    unsafe_allow_html=True,
+                            try:
+                                business_dna = get_business_dna_profile(user["id"])
+                            except Exception as error:
+                                st.error("Phase 8 database migration is required before Step 7 can continue.")
+                                st.code(str(error))
+                                return
+                            source = {
+                                "basic": basic_profile,
+                                "professional": professional_profile,
+                                "business": business_profile,
+                                "opportunity": opportunity_profile,
+                                "decision_makers": decision_maker_profile,
+                                "communication": communication_style,
+                            }
+                            with st.container(key="onboarding_card"):
+                                render_business_dna_review(
+                                    user, source, business_dna, openai_client
                                 )
-                                st.header("Business DNA Review")
-                                st.info("Coming in Phase 8")
 
     st.divider()
     if st.button("Log out"):

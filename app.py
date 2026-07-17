@@ -61,7 +61,7 @@ if auth_enabled():
     if app_user.get("onboarding_completed"):
         render_dashboard(app_user)
     else:
-        render_onboarding(app_user)
+        render_onboarding(app_user, client)
     st.stop()
 
 def extract_json(text):
