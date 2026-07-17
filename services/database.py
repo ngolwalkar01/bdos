@@ -119,6 +119,31 @@ def save_business_experience(user_id, experience):
         raise RuntimeError("The business experience profile could not be saved.")
     return response.data[0]
 
+def get_opportunity_preferences(user_id):
+    response = (
+        get_database_client()
+        .table("opportunity_preferences")
+        .select("*")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else {}
+
+
+def save_opportunity_preferences(user_id, preferences):
+    payload = {"user_id": user_id, **preferences}
+    response = (
+        get_database_client()
+        .table("opportunity_preferences")
+        .upsert(payload, on_conflict="user_id")
+        .select("*")
+        .execute()
+    )
+    if not response.data:
+        raise RuntimeError("The opportunity preferences could not be saved.")
+    return response.data[0]
+
 def advance_onboarding(user_id, step):
     response = (
         get_database_client()

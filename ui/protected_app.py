@@ -7,9 +7,11 @@ from services.database import (
     advance_onboarding,
     get_basic_profile,
     get_business_experience,
+    get_opportunity_preferences,
     get_professional_experience,
     save_basic_profile,
     save_business_experience,
+    save_opportunity_preferences,
     save_professional_experience,
     upload_resume,
 )
@@ -70,6 +72,29 @@ BUSINESS_PROBLEM_OPTIONS = [
     "Performance Optimization", "Customer Portal", "Order Management",
     "Inventory", "AI Automation", "Reporting", "Analytics",
 ]
+
+
+OPPORTUNITY_TYPE_OPTIONS = [
+    "Freelance", "Contract", "Part Time", "Full Time", "Consulting",
+    "Technical Advisor", "Long-term Partnership", "Equity Based",
+    "Agency Partnership",
+]
+
+COMPANY_SIZE_OPTIONS = [
+    "Startup", "Small Business", "Mid-size", "Enterprise", "No Preference",
+]
+
+COUNTRY_OPTIONS = [
+    "Australia", "Austria", "Belgium", "Brazil", "Canada", "Denmark", "Finland",
+    "France", "Germany", "India", "Ireland", "Italy", "Japan", "Netherlands",
+    "New Zealand", "Norway", "Poland", "Portugal", "Singapore", "South Africa",
+    "Spain", "Sweden", "Switzerland", "United Arab Emirates", "United Kingdom",
+    "United States",
+]
+
+BUDGET_TYPE_OPTIONS = ["Hourly", "Monthly", "Fixed Project"]
+CURRENCY_OPTIONS = ["USD", "EUR", "GBP", "INR", "AUD", "CAD", "DKK", "SEK", "NOK"]
+REMOTE_OPTIONS = ["Remote", "Hybrid", "Onsite"]
 
 CERTIFICATION_OPTIONS = [
     "AWS Certified", "Google Cloud Certified", "Microsoft Certified",
@@ -441,26 +466,181 @@ def render_business_experience(user, existing):
         st.error("Your Business Experience could not be saved.")
         st.code(str(error))
 
+
+def select_index(options, saved_value, default=0):
+    return options.index(saved_value) if saved_value in options else default
+
+
+def render_opportunity_preferences(user, existing):
+    st.markdown('<span class="bdos-eyebrow">Step 4 of 7</span>', unsafe_allow_html=True)
+    st.markdown(
+        '<h2 class="bdos-page-heading" style="font-size:2.15rem">'
+        "Describe your ideal opportunity</h2>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="bdos-page-copy">Define the work, companies, locations, and '
+        "commercial range the discovery engine should prioritize.</p>",
+        unsafe_allow_html=True,
+    )
+
+    with st.form("opportunity_preferences_form"):
+        opportunity_types = st.multiselect(
+            "Preferred Opportunity Type *",
+            options_with_saved(
+                OPPORTUNITY_TYPE_OPTIONS, existing.get("opportunity_types")
+            ),
+            default=existing.get("opportunity_types") or [],
+        )
+
+        company_sizes = st.multiselect(
+            "Preferred Company Size *",
+            COMPANY_SIZE_OPTIONS,
+            default=existing.get("company_sizes") or [],
+        )
+
+        preferred_industries = st.multiselect(
+            "Preferred Industries *",
+            options_with_saved(
+                INDUSTRY_OPTIONS, existing.get("preferred_industries")
+            ),
+            default=existing.get("preferred_industries") or [],
+        )
+        custom_industries = st.text_input(
+            "Add other preferred industries",
+            placeholder="Comma-separated",
+        )
+
+        preferred_countries = st.multiselect(
+            "Preferred Countries *",
+            options_with_saved(
+                COUNTRY_OPTIONS, existing.get("preferred_countries")
+            ),
+            default=existing.get("preferred_countries") or [],
+        )
+        custom_countries = st.text_input(
+            "Add other preferred countries",
+            placeholder="Comma-separated",
+        )
+
+        st.markdown("#### Preferred Budget")
+        budget_type_column, currency_column = st.columns(2)
+        with budget_type_column:
+            budget_type = st.selectbox(
+                "Budget Type",
+                BUDGET_TYPE_OPTIONS,
+                index=select_index(
+                    BUDGET_TYPE_OPTIONS, existing.get("budget_type")
+                ),
+            )
+        with currency_column:
+            currency = st.selectbox(
+                "Currency",
+                CURRENCY_OPTIONS,
+                index=select_index(
+                    CURRENCY_OPTIONS, existing.get("budget_currency")
+                ),
+            )
+
+        minimum_column, maximum_column = st.columns(2)
+        with minimum_column:
+            budget_min = st.number_input(
+                "Minimum",
+                min_value=0.0,
+                value=float(existing.get("budget_min") or 0),
+                step=100.0,
+            )
+        with maximum_column:
+            budget_max = st.number_input(
+                "Maximum",
+                min_value=0.0,
+                value=float(existing.get("budget_max") or 0),
+                step=100.0,
+            )
+
+        remote_preferences = st.multiselect(
+            "Remote Preference *",
+            REMOTE_OPTIONS,
+            default=existing.get("remote_preferences") or [],
+        )
+
+        draft_column, continue_column = st.columns(2)
+        with draft_column:
+            save_draft = st.form_submit_button("Save Draft", use_container_width=True)
+        with continue_column:
+            save_continue = st.form_submit_button(
+                "Save & Continue", type="primary", use_container_width=True
+            )
+
+    if not save_draft and not save_continue:
+        return
+
+    if "No Preference" in company_sizes:
+        company_sizes = ["No Preference"]
+
+    preferences = {
+        "opportunity_types": opportunity_types,
+        "company_sizes": company_sizes,
+        "preferred_industries": merge_custom_values(
+            preferred_industries, custom_industries
+        ),
+        "preferred_countries": merge_custom_values(
+            preferred_countries, custom_countries
+        ),
+        "budget_type": budget_type,
+        "budget_currency": currency,
+        "budget_min": float(budget_min),
+        "budget_max": float(budget_max),
+        "remote_preferences": remote_preferences,
+    }
+
+    if save_continue:
+        required_lists = {
+            "Preferred Opportunity Type": preferences["opportunity_types"],
+            "Preferred Company Size": preferences["company_sizes"],
+            "Preferred Industries": preferences["preferred_industries"],
+            "Preferred Countries": preferences["preferred_countries"],
+            "Remote Preference": preferences["remote_preferences"],
+        }
+        missing = [
+            label for label, values in required_lists.items() if not values
+        ]
+        if missing:
+            st.error("Complete the following fields: " + ", ".join(missing))
+            return
+        if budget_max and budget_max < budget_min:
+            st.error("Maximum budget must be greater than or equal to Minimum.")
+            return
+
+    try:
+        save_opportunity_preferences(user["id"], preferences)
+        if save_continue:
+            advance_onboarding(user["id"], 4)
+            st.session_state["edit_opportunity_preferences"] = False
+            st.success("Ideal Opportunity completed.")
+            st.rerun()
+        else:
+            st.success("Draft saved.")
+    except Exception as error:
+        st.error("Your Opportunity Preferences could not be saved.")
+        st.code(str(error))
+
 def render_review_menu(completed_steps):
     if completed_steps < 1:
         return
 
     spacer, review_column = st.columns([5, 1.25])
     with review_column:
-        with st.popover(
-            "Review & edit",
-            use_container_width=True,
-        ):
+        with st.popover("Review & edit", use_container_width=True):
             st.caption("Completed sections")
 
             if completed_steps >= 1 and st.button(
-                "Basic Profile",
-                key="review_basic_profile",
-                use_container_width=True,
+                "Basic Profile", key="review_basic_profile", use_container_width=True
             ):
                 st.session_state["edit_basic_profile"] = True
                 st.session_state["edit_professional_experience"] = False
                 st.session_state["edit_business_experience"] = False
+                st.session_state["edit_opportunity_preferences"] = False
                 st.rerun()
 
             if completed_steps >= 2 and st.button(
@@ -471,6 +651,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_basic_profile"] = False
                 st.session_state["edit_professional_experience"] = True
                 st.session_state["edit_business_experience"] = False
+                st.session_state["edit_opportunity_preferences"] = False
                 st.rerun()
 
             if completed_steps >= 3 and st.button(
@@ -481,6 +662,18 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_basic_profile"] = False
                 st.session_state["edit_professional_experience"] = False
                 st.session_state["edit_business_experience"] = True
+                st.session_state["edit_opportunity_preferences"] = False
+                st.rerun()
+
+            if completed_steps >= 4 and st.button(
+                "Ideal Opportunity",
+                key="review_opportunity_preferences",
+                use_container_width=True,
+            ):
+                st.session_state["edit_basic_profile"] = False
+                st.session_state["edit_professional_experience"] = False
+                st.session_state["edit_business_experience"] = False
+                st.session_state["edit_opportunity_preferences"] = True
                 st.rerun()
 
 def render_onboarding(user):
@@ -490,6 +683,9 @@ def render_onboarding(user):
         "edit_professional_experience", False
     )
     editing_business = st.session_state.get("edit_business_experience", False)
+    editing_opportunity = st.session_state.get(
+        "edit_opportunity_preferences", False
+    )
 
     with st.container(key="onboarding_topbar"):
         brand_wordmark()
@@ -540,9 +736,7 @@ def render_onboarding(user):
             try:
                 business_profile = get_business_experience(user["id"])
             except Exception as error:
-                st.error(
-                    "Phase 4 database migration is required before Step 3 can continue."
-                )
+                st.error("The Business Experience database migration is required.")
                 st.code(str(error))
                 return
 
@@ -553,13 +747,31 @@ def render_onboarding(user):
                     st.session_state["edit_business_experience"] = False
                     st.rerun()
             else:
-                with st.container(key="coming_soon_card"):
-                    st.markdown(
-                        '<span class="bdos-eyebrow">Step 4 of 7</span>',
-                        unsafe_allow_html=True,
+                try:
+                    opportunity_profile = get_opportunity_preferences(user["id"])
+                except Exception as error:
+                    st.error(
+                        "Phase 5 database migration is required before Step 4 can continue."
                     )
-                    st.header("Ideal Opportunity")
-                    st.info("Coming in Phase 5")
+                    st.code(str(error))
+                    return
+
+                if current_step == 3 or editing_opportunity:
+                    with st.container(key="onboarding_card"):
+                        render_opportunity_preferences(
+                            user, opportunity_profile
+                        )
+                    if editing_opportunity and st.button("Return to current step"):
+                        st.session_state["edit_opportunity_preferences"] = False
+                        st.rerun()
+                else:
+                    with st.container(key="coming_soon_card"):
+                        st.markdown(
+                            '<span class="bdos-eyebrow">Step 5 of 7</span>',
+                            unsafe_allow_html=True,
+                        )
+                        st.header("Ideal Decision Makers")
+                        st.info("Coming in Phase 6")
 
     st.divider()
     if st.button("Log out"):
