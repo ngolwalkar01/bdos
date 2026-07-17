@@ -144,6 +144,26 @@ def save_opportunity_preferences(user_id, preferences):
         raise RuntimeError("The opportunity preferences could not be saved.")
     return response.data[0]
 
+
+def get_decision_maker_preferences(user_id):
+    response = (
+        get_database_client().table("decision_maker_preferences").select("*")
+        .eq("user_id", user_id).limit(1).execute()
+    )
+    return response.data[0] if response.data else {}
+
+
+def save_decision_maker_preferences(user_id, preferences):
+    payload = {"user_id": user_id, **preferences}
+    response = (
+        get_database_client().table("decision_maker_preferences")
+        .upsert(payload, on_conflict="user_id").select("*").execute()
+    )
+    if not response.data:
+        raise RuntimeError("The decision maker preferences could not be saved.")
+    return response.data[0]
+
+
 def advance_onboarding(user_id, step):
     response = (
         get_database_client()

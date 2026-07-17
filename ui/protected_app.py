@@ -7,10 +7,12 @@ from services.database import (
     advance_onboarding,
     get_basic_profile,
     get_business_experience,
+    get_decision_maker_preferences,
     get_opportunity_preferences,
     get_professional_experience,
     save_basic_profile,
     save_business_experience,
+    save_decision_maker_preferences,
     save_opportunity_preferences,
     save_professional_experience,
     upload_resume,
@@ -95,6 +97,13 @@ COUNTRY_OPTIONS = [
 BUDGET_TYPE_OPTIONS = ["Hourly", "Monthly", "Fixed Project"]
 CURRENCY_OPTIONS = ["USD", "EUR", "GBP", "INR", "AUD", "CAD", "DKK", "SEK", "NOK"]
 REMOTE_OPTIONS = ["Remote", "Hybrid", "Onsite"]
+
+DECISION_MAKER_OPTIONS = [
+    "Founder", "CEO", "COO", "CTO", "CIO", "Head of Ecommerce",
+    "Product Manager", "Operations Manager", "Engineering Manager", "HR",
+    "Recruiter",
+]
+
 
 CERTIFICATION_OPTIONS = [
     "AWS Certified", "Google Cloud Certified", "Microsoft Certified",
@@ -625,6 +634,44 @@ def render_opportunity_preferences(user, existing):
         st.error("Your Opportunity Preferences could not be saved.")
         st.code(str(error))
 
+
+def render_decision_maker_preferences(user, existing):
+    st.markdown('<span class="bdos-eyebrow">Step 5 of 7</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="bdos-page-heading" style="font-size:2.15rem">Choose your ideal decision makers</h2>', unsafe_allow_html=True)
+    st.markdown('<p class="bdos-page-copy">Identify the people Business Discovery and Outreach should prioritize inside your ideal companies.</p>', unsafe_allow_html=True)
+    with st.form("decision_maker_preferences_form"):
+        roles = st.multiselect(
+            "Who would you like to connect with? *",
+            options_with_saved(DECISION_MAKER_OPTIONS, existing.get("decision_maker_roles")),
+            default=existing.get("decision_maker_roles") or [],
+            help="Select every role that commonly influences or owns the problems you solve.",
+        )
+        custom_roles = st.text_input("Add other decision-maker roles", placeholder="Comma-separated, for example: VP of Growth, Head of Partnerships")
+        draft_column, continue_column = st.columns(2)
+        with draft_column:
+            save_draft = st.form_submit_button("Save Draft", use_container_width=True)
+        with continue_column:
+            save_continue = st.form_submit_button("Save & Continue", type="primary", use_container_width=True)
+    if not save_draft and not save_continue:
+        return
+    preferences = {"decision_maker_roles": merge_custom_values(roles, custom_roles)}
+    if save_continue and not preferences["decision_maker_roles"]:
+        st.error("Select or add at least one decision-maker role.")
+        return
+    try:
+        save_decision_maker_preferences(user["id"], preferences)
+        if save_continue:
+            advance_onboarding(user["id"], 5)
+            st.session_state["edit_decision_maker_preferences"] = False
+            st.success("Ideal Decision Makers completed.")
+            st.rerun()
+        else:
+            st.success("Draft saved.")
+    except Exception as error:
+        st.error("Your Decision Maker Profile could not be saved.")
+        st.code(str(error))
+
+
 def render_review_menu(completed_steps):
     if completed_steps < 1:
         return
@@ -641,6 +688,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_professional_experience"] = False
                 st.session_state["edit_business_experience"] = False
                 st.session_state["edit_opportunity_preferences"] = False
+                st.session_state["edit_decision_maker_preferences"] = False
                 st.rerun()
 
             if completed_steps >= 2 and st.button(
@@ -652,6 +700,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_professional_experience"] = True
                 st.session_state["edit_business_experience"] = False
                 st.session_state["edit_opportunity_preferences"] = False
+                st.session_state["edit_decision_maker_preferences"] = False
                 st.rerun()
 
             if completed_steps >= 3 and st.button(
@@ -663,6 +712,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_professional_experience"] = False
                 st.session_state["edit_business_experience"] = True
                 st.session_state["edit_opportunity_preferences"] = False
+                st.session_state["edit_decision_maker_preferences"] = False
                 st.rerun()
 
             if completed_steps >= 4 and st.button(
@@ -674,6 +724,17 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_professional_experience"] = False
                 st.session_state["edit_business_experience"] = False
                 st.session_state["edit_opportunity_preferences"] = True
+                st.session_state["edit_decision_maker_preferences"] = False
+                st.rerun()
+
+            if completed_steps >= 5 and st.button(
+                "Ideal Decision Makers", key="review_decision_maker_preferences", use_container_width=True
+            ):
+                st.session_state["edit_basic_profile"] = False
+                st.session_state["edit_professional_experience"] = False
+                st.session_state["edit_business_experience"] = False
+                st.session_state["edit_opportunity_preferences"] = False
+                st.session_state["edit_decision_maker_preferences"] = True
                 st.rerun()
 
 def render_onboarding(user):
@@ -685,6 +746,9 @@ def render_onboarding(user):
     editing_business = st.session_state.get("edit_business_experience", False)
     editing_opportunity = st.session_state.get(
         "edit_opportunity_preferences", False
+    )
+    editing_decision_makers = st.session_state.get(
+        "edit_decision_maker_preferences", False
     )
 
     with st.container(key="onboarding_topbar"):
@@ -765,13 +829,23 @@ def render_onboarding(user):
                         st.session_state["edit_opportunity_preferences"] = False
                         st.rerun()
                 else:
-                    with st.container(key="coming_soon_card"):
-                        st.markdown(
-                            '<span class="bdos-eyebrow">Step 5 of 7</span>',
-                            unsafe_allow_html=True,
-                        )
-                        st.header("Ideal Decision Makers")
-                        st.info("Coming in Phase 6")
+                    try:
+                        decision_maker_profile = get_decision_maker_preferences(user["id"])
+                    except Exception as error:
+                        st.error("Phase 6 database migration is required before Step 5 can continue.")
+                        st.code(str(error))
+                        return
+                    if current_step == 4 or editing_decision_makers:
+                        with st.container(key="onboarding_card"):
+                            render_decision_maker_preferences(user, decision_maker_profile)
+                        if editing_decision_makers and st.button("Return to current step"):
+                            st.session_state["edit_decision_maker_preferences"] = False
+                            st.rerun()
+                    else:
+                        with st.container(key="coming_soon_card"):
+                            st.markdown('<span class="bdos-eyebrow">Step 6 of 7</span>', unsafe_allow_html=True)
+                            st.header("Communication Style")
+                            st.info("Coming in Phase 7")
 
     st.divider()
     if st.button("Log out"):
