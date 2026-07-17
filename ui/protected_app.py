@@ -348,6 +348,38 @@ def render_professional_experience(user, existing):
         st.error("Your Professional Experience could not be saved.")
         st.code(str(error))
 
+
+def render_review_menu(completed_steps):
+    if completed_steps < 1:
+        return
+
+    spacer, review_column = st.columns([5, 1.25])
+    with review_column:
+        with st.popover(
+            "Review & edit",
+            icon=":material/edit:",
+            use_container_width=True,
+        ):
+            st.caption("Completed sections")
+
+            if completed_steps >= 1 and st.button(
+                "Basic Profile",
+                key="review_basic_profile",
+                use_container_width=True,
+            ):
+                st.session_state["edit_basic_profile"] = True
+                st.session_state["edit_professional_experience"] = False
+                st.rerun()
+
+            if completed_steps >= 2 and st.button(
+                "Professional Experience",
+                key="review_professional_experience",
+                use_container_width=True,
+            ):
+                st.session_state["edit_basic_profile"] = False
+                st.session_state["edit_professional_experience"] = True
+                st.rerun()
+
 def render_onboarding(user):
     current_step = int(user.get("onboarding_step") or 0)
     editing_basic = st.session_state.get("edit_basic_profile", False)
@@ -371,6 +403,7 @@ def render_onboarding(user):
         unsafe_allow_html=True,
     )
     render_progress(current_step)
+    render_review_menu(current_step)
 
     try:
         basic_profile = get_basic_profile(user["id"])
@@ -400,19 +433,10 @@ def render_onboarding(user):
             with st.container(key="onboarding_card"):
                 render_professional_experience(user, professional_profile)
 
-            controls = st.columns(2)
-            with controls[0]:
-                if st.button("Back to Basic Profile", use_container_width=True):
-                    st.session_state["edit_basic_profile"] = True
-                    st.rerun()
-            with controls[1]:
-                if editing_professional and st.button(
-                    "Cancel editing", use_container_width=True
-                ):
-                    st.session_state["edit_professional_experience"] = False
-                    st.rerun()
+            if editing_professional and st.button("Return to current step"):
+                st.session_state["edit_professional_experience"] = False
+                st.rerun()
         else:
-            st.success("Steps 1 and 2 are complete.")
             with st.container(key="coming_soon_card"):
                 st.markdown(
                     '<span class="bdos-eyebrow">Step 3 of 7</span>',
@@ -420,18 +444,6 @@ def render_onboarding(user):
                 )
                 st.header("Business Experience")
                 st.info("Coming in Phase 4")
-
-            edit_basic, edit_professional = st.columns(2)
-            with edit_basic:
-                if st.button("Edit Basic Profile", use_container_width=True):
-                    st.session_state["edit_basic_profile"] = True
-                    st.rerun()
-            with edit_professional:
-                if st.button(
-                    "Edit Professional Experience", use_container_width=True
-                ):
-                    st.session_state["edit_professional_experience"] = True
-                    st.rerun()
 
     st.divider()
     if st.button("Log out"):
