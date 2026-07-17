@@ -35,7 +35,7 @@ create table if not exists public.user_profiles (
     user_id uuid primary key references public.users(id) on delete cascade,
     full_name text,
     professional_headline text,
-    current_role text,
+    current_job_role text,
     years_experience smallint check (years_experience between 0 and 80),
     country text,
     preferred_timezone text,

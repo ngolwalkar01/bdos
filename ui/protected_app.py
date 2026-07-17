@@ -66,7 +66,7 @@ def render_basic_profile(user, existing):
 
         role_column, experience_column = st.columns(2)
         with role_column:
-            role = st.text_input("Current Role *", value=existing.get("current_role") or "")
+            role = st.text_input("Current Role *", value=existing.get("current_job_role") or "")
         with experience_column:
             years = st.number_input(
                 "Years of Experience *",
@@ -143,7 +143,7 @@ def render_basic_profile(user, existing):
     profile = {
         "full_name": full_name.strip() or None,
         "professional_headline": headline.strip() or None,
-        "current_role": role.strip() or None,
+        "current_job_role": role.strip() or None,
         "years_experience": int(years),
         "country": country.strip() or None,
         "preferred_timezone": timezone,
