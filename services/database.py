@@ -41,3 +41,79 @@ def ensure_user(identity):
         raise RuntimeError("The user profile could not be created or loaded.")
 
     return response.data[0]
+
+
+def get_basic_profile(user_id):
+    response = (
+        get_database_client()
+        .table("user_profiles")
+        .select("*")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else {}
+
+
+def save_basic_profile(user_id, profile):
+    payload = {"user_id": user_id, **profile}
+    response = (
+        get_database_client()
+        .table("user_profiles")
+        .upsert(payload, on_conflict="user_id")
+        .select("*")
+        .execute()
+    )
+    if not response.data:
+        raise RuntimeError("The basic profile could not be saved.")
+    return response.data[0]
+
+
+def advance_onboarding(user_id, step):
+    response = (
+        get_database_client()
+        .table("users")
+        .update({"onboarding_step": step})
+        .eq("id", user_id)
+        .lt("onboarding_step", step)
+        .execute()
+    )
+    return response.data
+
+
+def upload_resume(user_id, uploaded_file):
+    client = get_database_client()
+    bucket_name = "resumes"
+
+    try:
+        client.storage.get_bucket(bucket_name)
+    except Exception:
+        client.storage.create_bucket(
+            bucket_name,
+            options={
+                "public": False,
+                "allowed_mime_types": [
+                    "application/pdf",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ],
+                "file_size_limit": 10 * 1024 * 1024,
+            },
+        )
+
+    extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
+    object_path = f"{user_id}/resume.{extension}"
+    client.storage.from_(bucket_name).upload(
+        path=object_path,
+        file=uploaded_file.getvalue(),
+        file_options={
+            "content-type": uploaded_file.type,
+            "cache-control": "3600",
+            "upsert": "true",
+        },
+    )
+    return {
+        "resume_path": object_path,
+        "resume_filename": uploaded_file.name,
+        "resume_content_type": uploaded_file.type,
+        "resume_size_bytes": uploaded_file.size,
+    }

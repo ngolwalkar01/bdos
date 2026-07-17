@@ -8,7 +8,7 @@ from tavily import TavilyClient
 from services.auth import auth_enabled, require_authenticated_user
 from services.config import get_secret
 from services.database import ensure_user
-from ui.protected_app import render_dashboard, render_onboarding_start
+from ui.protected_app import render_dashboard, render_onboarding
 
 load_dotenv()
 
@@ -54,7 +54,7 @@ if auth_enabled():
     if app_user.get("onboarding_completed"):
         render_dashboard(app_user)
     else:
-        render_onboarding_start(app_user)
+        render_onboarding(app_user)
     st.stop()
 
 def extract_json(text):
