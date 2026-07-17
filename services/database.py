@@ -94,6 +94,31 @@ def save_professional_experience(user_id, experience):
         raise RuntimeError("The professional experience profile could not be saved.")
     return response.data[0]
 
+def get_business_experience(user_id):
+    response = (
+        get_database_client()
+        .table("business_experience")
+        .select("*")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else {}
+
+
+def save_business_experience(user_id, experience):
+    payload = {"user_id": user_id, **experience}
+    response = (
+        get_database_client()
+        .table("business_experience")
+        .upsert(payload, on_conflict="user_id")
+        .select("*")
+        .execute()
+    )
+    if not response.data:
+        raise RuntimeError("The business experience profile could not be saved.")
+    return response.data[0]
+
 def advance_onboarding(user_id, step):
     response = (
         get_database_client()

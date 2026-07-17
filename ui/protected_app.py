@@ -6,8 +6,10 @@ import streamlit as st
 from services.database import (
     advance_onboarding,
     get_basic_profile,
+    get_business_experience,
     get_professional_experience,
     save_basic_profile,
+    save_business_experience,
     save_professional_experience,
     upload_resume,
 )
@@ -54,6 +56,19 @@ FRAMEWORK_OPTIONS = [
 PLATFORM_OPTIONS = [
     "AWS", "Google Cloud", "Microsoft Azure", "Vercel", "Cloudflare",
     "Supabase", "Firebase", "Shopify", "HubSpot", "Salesforce",
+]
+
+INDUSTRY_OPTIONS = [
+    "Ecommerce", "Grocery Delivery", "Dairy", "Logistics", "Healthcare",
+    "Education", "Manufacturing", "Real Estate", "SaaS", "Finance",
+    "Wellness", "Marketplace", "Social Network", "Hospitality", "Others",
+]
+
+BUSINESS_PROBLEM_OPTIONS = [
+    "Subscription Commerce", "Payment Integration", "Checkout Optimization",
+    "Business Automation", "API Integration", "CRM", "ERP",
+    "Performance Optimization", "Customer Portal", "Order Management",
+    "Inventory", "AI Automation", "Reporting", "Analytics",
 ]
 
 CERTIFICATION_OPTIONS = [
@@ -349,6 +364,83 @@ def render_professional_experience(user, existing):
         st.code(str(error))
 
 
+
+def render_business_experience(user, existing):
+    st.markdown('<span class="bdos-eyebrow">Step 3 of 7</span>', unsafe_allow_html=True)
+    st.markdown(
+        '<h2 class="bdos-page-heading" style="font-size:2.15rem">'
+        "Define your business experience</h2>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="bdos-page-copy">Capture the industries you understand and the '
+        "business problems you have already solved.</p>",
+        unsafe_allow_html=True,
+    )
+
+    with st.form("business_experience_form"):
+        industries = st.multiselect(
+            "Which industries have you worked in? *",
+            options_with_saved(INDUSTRY_OPTIONS, existing.get("industries")),
+            default=existing.get("industries") or [],
+        )
+        custom_industries = st.text_input(
+            "Add other industries",
+            placeholder="Comma-separated, for example: Agritech, Renewable Energy",
+        )
+
+        st.divider()
+
+        business_problems = st.multiselect(
+            "Which business problems have you solved? *",
+            options_with_saved(
+                BUSINESS_PROBLEM_OPTIONS, existing.get("business_problems")
+            ),
+            default=existing.get("business_problems") or [],
+        )
+        custom_problems = st.text_input(
+            "Add other business problems",
+            placeholder="Comma-separated, for example: Delivery Scheduling, Renewal Recovery",
+        )
+
+        draft_column, continue_column = st.columns(2)
+        with draft_column:
+            save_draft = st.form_submit_button("Save Draft", use_container_width=True)
+        with continue_column:
+            save_continue = st.form_submit_button(
+                "Save & Continue", type="primary", use_container_width=True
+            )
+
+    if not save_draft and not save_continue:
+        return
+
+    experience = {
+        "industries": merge_custom_values(industries, custom_industries),
+        "business_problems": merge_custom_values(
+            business_problems, custom_problems
+        ),
+    }
+
+    if save_continue and not experience["industries"]:
+        st.error("Select or add at least one industry.")
+        return
+    if save_continue and not experience["business_problems"]:
+        st.error("Select or add at least one business problem.")
+        return
+
+    try:
+        save_business_experience(user["id"], experience)
+        if save_continue:
+            advance_onboarding(user["id"], 3)
+            st.session_state["edit_business_experience"] = False
+            st.success("Business Experience completed.")
+            st.rerun()
+        else:
+            st.success("Draft saved.")
+    except Exception as error:
+        st.error("Your Business Experience could not be saved.")
+        st.code(str(error))
+
 def render_review_menu(completed_steps):
     if completed_steps < 1:
         return
@@ -368,6 +460,7 @@ def render_review_menu(completed_steps):
             ):
                 st.session_state["edit_basic_profile"] = True
                 st.session_state["edit_professional_experience"] = False
+                st.session_state["edit_business_experience"] = False
                 st.rerun()
 
             if completed_steps >= 2 and st.button(
@@ -377,6 +470,17 @@ def render_review_menu(completed_steps):
             ):
                 st.session_state["edit_basic_profile"] = False
                 st.session_state["edit_professional_experience"] = True
+                st.session_state["edit_business_experience"] = False
+                st.rerun()
+
+            if completed_steps >= 3 and st.button(
+                "Business Experience",
+                key="review_business_experience",
+                use_container_width=True,
+            ):
+                st.session_state["edit_basic_profile"] = False
+                st.session_state["edit_professional_experience"] = False
+                st.session_state["edit_business_experience"] = True
                 st.rerun()
 
 def render_onboarding(user):
@@ -385,6 +489,7 @@ def render_onboarding(user):
     editing_professional = st.session_state.get(
         "edit_professional_experience", False
     )
+    editing_business = st.session_state.get("edit_business_experience", False)
 
     with st.container(key="onboarding_topbar"):
         brand_wordmark()
@@ -414,35 +519,47 @@ def render_onboarding(user):
     if current_step == 0 or editing_basic:
         with st.container(key="onboarding_card"):
             render_basic_profile(user, basic_profile)
-
-        if editing_basic and st.button("Cancel editing"):
+        if editing_basic and st.button("Return to current step"):
             st.session_state["edit_basic_profile"] = False
             st.rerun()
     else:
         try:
             professional_profile = get_professional_experience(user["id"])
         except Exception as error:
-            st.error(
-                "Phase 3 database migration is required before Step 2 can continue."
-            )
+            st.error("The Professional Experience database migration is required.")
             st.code(str(error))
             return
 
         if current_step == 1 or editing_professional:
             with st.container(key="onboarding_card"):
                 render_professional_experience(user, professional_profile)
-
             if editing_professional and st.button("Return to current step"):
                 st.session_state["edit_professional_experience"] = False
                 st.rerun()
         else:
-            with st.container(key="coming_soon_card"):
-                st.markdown(
-                    '<span class="bdos-eyebrow">Step 3 of 7</span>',
-                    unsafe_allow_html=True,
+            try:
+                business_profile = get_business_experience(user["id"])
+            except Exception as error:
+                st.error(
+                    "Phase 4 database migration is required before Step 3 can continue."
                 )
-                st.header("Business Experience")
-                st.info("Coming in Phase 4")
+                st.code(str(error))
+                return
+
+            if current_step == 2 or editing_business:
+                with st.container(key="onboarding_card"):
+                    render_business_experience(user, business_profile)
+                if editing_business and st.button("Return to current step"):
+                    st.session_state["edit_business_experience"] = False
+                    st.rerun()
+            else:
+                with st.container(key="coming_soon_card"):
+                    st.markdown(
+                        '<span class="bdos-eyebrow">Step 4 of 7</span>',
+                        unsafe_allow_html=True,
+                    )
+                    st.header("Ideal Opportunity")
+                    st.info("Coming in Phase 5")
 
     st.divider()
     if st.button("Log out"):
