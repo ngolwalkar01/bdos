@@ -3,7 +3,14 @@ from zoneinfo import available_timezones
 
 import streamlit as st
 
-from services.database import advance_onboarding, get_basic_profile, save_basic_profile, upload_resume
+from services.database import (
+    advance_onboarding,
+    get_basic_profile,
+    get_professional_experience,
+    save_basic_profile,
+    save_professional_experience,
+    upload_resume,
+)
 from ui.theme import brand_wordmark
 
 
@@ -26,6 +33,32 @@ NAVIGATION = [
     "Freelance Jobs",
     "Analytics",
     "Settings",
+]
+SKILL_OPTIONS = [
+    "WordPress", "WooCommerce", "PHP", "Python", "JavaScript", "TypeScript",
+    "SQL", "REST APIs", "GraphQL", "Ecommerce", "Subscription Commerce",
+    "Business Automation", "API Integration", "System Architecture",
+    "Performance Optimization", "Technical Consulting",
+]
+
+TECHNOLOGY_OPTIONS = [
+    "MySQL", "PostgreSQL", "Redis", "Docker", "Git", "GitHub", "Node.js",
+    "Stripe", "OpenAI API", "Tavily", "Elasticsearch", "Linux",
+]
+
+FRAMEWORK_OPTIONS = [
+    "React", "Next.js", "Laravel", "Django", "FastAPI", "Flask", "Streamlit",
+    "Express.js", "Vue.js", "Angular", "Tailwind CSS",
+]
+
+PLATFORM_OPTIONS = [
+    "AWS", "Google Cloud", "Microsoft Azure", "Vercel", "Cloudflare",
+    "Supabase", "Firebase", "Shopify", "HubSpot", "Salesforce",
+]
+
+CERTIFICATION_OPTIONS = [
+    "AWS Certified", "Google Cloud Certified", "Microsoft Certified",
+    "Scrum Master", "PMP", "HubSpot Certified", "Shopify Partner",
 ]
 
 
@@ -188,9 +221,139 @@ def render_basic_profile(user, existing):
         st.code(str(error))
 
 
+
+def merge_custom_values(selected, custom_text):
+    custom_values = [
+        value.strip()
+        for value in custom_text.replace(";", ",").replace("\n", ",").split(",")
+        if value.strip()
+    ]
+    return list(dict.fromkeys([*selected, *custom_values]))
+
+
+def options_with_saved(options, saved):
+    return list(dict.fromkeys([*options, *(saved or [])]))
+
+
+def render_professional_experience(user, existing):
+    st.markdown('<span class="bdos-eyebrow">Step 2 of 7</span>', unsafe_allow_html=True)
+    st.markdown(
+        '<h2 class="bdos-page-heading" style="font-size:2.15rem">'
+        "Map your professional expertise</h2>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="bdos-page-copy">Select the skills and tools that best represent '
+        "the work you can confidently deliver.</p>",
+        unsafe_allow_html=True,
+    )
+
+    with st.form("professional_experience_form"):
+        primary = st.multiselect(
+            "Primary Skills *",
+            options_with_saved(SKILL_OPTIONS, existing.get("primary_skills")),
+            default=existing.get("primary_skills") or [],
+            help="Choose the skills you want to be primarily known for.",
+        )
+        custom_primary = st.text_input(
+            "Add custom primary skills",
+            placeholder="Comma-separated, for example: Headless Commerce, Plugin Architecture",
+        )
+
+        secondary = st.multiselect(
+            "Secondary Skills",
+            options_with_saved(SKILL_OPTIONS, existing.get("secondary_skills")),
+            default=existing.get("secondary_skills") or [],
+        )
+        custom_secondary = st.text_input(
+            "Add custom secondary skills",
+            placeholder="Comma-separated",
+        )
+
+        left_column, right_column = st.columns(2)
+        with left_column:
+            technologies = st.multiselect(
+                "Technologies",
+                options_with_saved(TECHNOLOGY_OPTIONS, existing.get("technologies")),
+                default=existing.get("technologies") or [],
+            )
+            custom_technologies = st.text_input(
+                "Add custom technologies", placeholder="Comma-separated"
+            )
+            frameworks = st.multiselect(
+                "Frameworks",
+                options_with_saved(FRAMEWORK_OPTIONS, existing.get("frameworks")),
+                default=existing.get("frameworks") or [],
+            )
+            custom_frameworks = st.text_input(
+                "Add custom frameworks", placeholder="Comma-separated"
+            )
+
+        with right_column:
+            platforms = st.multiselect(
+                "Platforms",
+                options_with_saved(PLATFORM_OPTIONS, existing.get("platforms")),
+                default=existing.get("platforms") or [],
+            )
+            custom_platforms = st.text_input(
+                "Add custom platforms", placeholder="Comma-separated"
+            )
+            certifications = st.multiselect(
+                "Certifications (Optional)",
+                options_with_saved(
+                    CERTIFICATION_OPTIONS, existing.get("certifications")
+                ),
+                default=existing.get("certifications") or [],
+            )
+            custom_certifications = st.text_input(
+                "Add custom certifications", placeholder="Comma-separated"
+            )
+
+        draft_column, continue_column = st.columns(2)
+        with draft_column:
+            save_draft = st.form_submit_button("Save Draft", use_container_width=True)
+        with continue_column:
+            save_continue = st.form_submit_button(
+                "Save & Continue", type="primary", use_container_width=True
+            )
+
+    if not save_draft and not save_continue:
+        return
+
+    experience = {
+        "primary_skills": merge_custom_values(primary, custom_primary),
+        "secondary_skills": merge_custom_values(secondary, custom_secondary),
+        "technologies": merge_custom_values(technologies, custom_technologies),
+        "frameworks": merge_custom_values(frameworks, custom_frameworks),
+        "platforms": merge_custom_values(platforms, custom_platforms),
+        "certifications": merge_custom_values(
+            certifications, custom_certifications
+        ),
+    }
+
+    if save_continue and not experience["primary_skills"]:
+        st.error("Select or add at least one Primary Skill.")
+        return
+
+    try:
+        save_professional_experience(user["id"], experience)
+        if save_continue:
+            advance_onboarding(user["id"], 2)
+            st.session_state["edit_professional_experience"] = False
+            st.success("Professional Experience completed.")
+            st.rerun()
+        else:
+            st.success("Draft saved.")
+    except Exception as error:
+        st.error("Your Professional Experience could not be saved.")
+        st.code(str(error))
+
 def render_onboarding(user):
     current_step = int(user.get("onboarding_step") or 0)
-    editing = st.session_state.get("edit_basic_profile", False)
+    editing_basic = st.session_state.get("edit_basic_profile", False)
+    editing_professional = st.session_state.get(
+        "edit_professional_experience", False
+    )
 
     with st.container(key="onboarding_topbar"):
         brand_wordmark()
@@ -210,40 +373,69 @@ def render_onboarding(user):
     render_progress(current_step)
 
     try:
-        existing = get_basic_profile(user["id"])
+        basic_profile = get_basic_profile(user["id"])
     except Exception as error:
-        st.error("Phase 2 database migration is required before onboarding can continue.")
+        st.error("The Basic Profile database migration is required.")
         st.code(str(error))
-        if st.button("Log out"):
-            st.logout()
         return
 
-    if current_step >= 1 and not editing:
-        st.success("Step 1 - Basic Profile is complete.")
-        st.header("Step 2 - Professional Experience")
-        st.info("Coming in Phase 3")
+    if current_step == 0 or editing_basic:
+        with st.container(key="onboarding_card"):
+            render_basic_profile(user, basic_profile)
 
-        edit_column, logout_column = st.columns(2)
-        with edit_column:
-            if st.button("Edit Basic Profile", use_container_width=True):
-                st.session_state["edit_basic_profile"] = True
-                st.rerun()
-        with logout_column:
-            if st.button("Log out", use_container_width=True):
-                st.logout()
-        return
+        if editing_basic and st.button("Cancel editing"):
+            st.session_state["edit_basic_profile"] = False
+            st.rerun()
+    else:
+        try:
+            professional_profile = get_professional_experience(user["id"])
+        except Exception as error:
+            st.error(
+                "Phase 3 database migration is required before Step 2 can continue."
+            )
+            st.code(str(error))
+            return
 
-    with st.container(key="onboarding_card"):
-        render_basic_profile(user, existing)
+        if current_step == 1 or editing_professional:
+            with st.container(key="onboarding_card"):
+                render_professional_experience(user, professional_profile)
 
-    if editing and st.button("Cancel editing"):
-        st.session_state["edit_basic_profile"] = False
-        st.rerun()
+            controls = st.columns(2)
+            with controls[0]:
+                if st.button("Back to Basic Profile", use_container_width=True):
+                    st.session_state["edit_basic_profile"] = True
+                    st.rerun()
+            with controls[1]:
+                if editing_professional and st.button(
+                    "Cancel editing", use_container_width=True
+                ):
+                    st.session_state["edit_professional_experience"] = False
+                    st.rerun()
+        else:
+            st.success("Steps 1 and 2 are complete.")
+            with st.container(key="coming_soon_card"):
+                st.markdown(
+                    '<span class="bdos-eyebrow">Step 3 of 7</span>',
+                    unsafe_allow_html=True,
+                )
+                st.header("Business Experience")
+                st.info("Coming in Phase 4")
+
+            edit_basic, edit_professional = st.columns(2)
+            with edit_basic:
+                if st.button("Edit Basic Profile", use_container_width=True):
+                    st.session_state["edit_basic_profile"] = True
+                    st.rerun()
+            with edit_professional:
+                if st.button(
+                    "Edit Professional Experience", use_container_width=True
+                ):
+                    st.session_state["edit_professional_experience"] = True
+                    st.rerun()
 
     st.divider()
     if st.button("Log out"):
         st.logout()
-
 
 def render_dashboard(user):
     with st.sidebar:

@@ -69,6 +69,31 @@ def save_basic_profile(user_id, profile):
     return response.data[0]
 
 
+def get_professional_experience(user_id):
+    response = (
+        get_database_client()
+        .table("professional_experience")
+        .select("*")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else {}
+
+
+def save_professional_experience(user_id, experience):
+    payload = {"user_id": user_id, **experience}
+    response = (
+        get_database_client()
+        .table("professional_experience")
+        .upsert(payload, on_conflict="user_id")
+        .select("*")
+        .execute()
+    )
+    if not response.data:
+        raise RuntimeError("The professional experience profile could not be saved.")
+    return response.data[0]
+
 def advance_onboarding(user_id, step):
     response = (
         get_database_client()
