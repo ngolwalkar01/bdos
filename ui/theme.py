@@ -387,6 +387,75 @@ div[data-testid="stNumberInputContainer"] > div:focus-within {
         padding: 1.35rem 1rem 1rem;
     }
 }
+
+/* UI correction layer */
+button[kind="primary"],
+button[kind="primary"] p,
+button[kind="primary"] span,
+div[data-testid="stFormSubmitButton"] button[kind="primary"] p,
+div[data-testid="stFormSubmitButton"] button[kind="primary"] span {
+    color: #ffffff !important;
+}
+
+.st-key-google_login button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px !important;
+    padding: 0 18px 0 50px !important;
+    color: #1f1f1f !important;
+    border: 1px solid #747775 !important;
+    border-radius: 10px !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    font-family: Roboto, Arial, sans-serif !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+}
+
+.st-key-google_login button p,
+.st-key-google_login button span {
+    color: #1f1f1f !important;
+}
+
+.st-key-google_login button::before {
+    content: "";
+    position: absolute;
+    left: 17px;
+    width: 20px;
+    height: 20px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%234285F4' d='M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.87h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.35Z'/%3E%3Cpath fill='%2334A853' d='M12 22c2.7 0 4.96-.9 6.62-2.42l-3.24-2.51c-.9.6-2.04.96-3.38.96-2.6 0-4.81-1.76-5.6-4.13H3.05v2.59A10 10 0 0 0 12 22Z'/%3E%3Cpath fill='%23FBBC05' d='M6.4 13.9A6 6 0 0 1 6.09 12c0-.66.11-1.3.31-1.9V7.51H3.05A10 10 0 0 0 2 12c0 1.61.38 3.14 1.05 4.49L6.4 13.9Z'/%3E%3Cpath fill='%23EA4335' d='M12 5.97c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.64 9.64 0 0 0 12 2a10 10 0 0 0-8.95 5.51L6.4 10.1C7.19 7.73 9.4 5.97 12 5.97Z'/%3E%3C/svg%3E");
+}
+
+.st-key-google_login button:hover {
+    background: #f8fafd !important;
+    border-color: #5f6368 !important;
+    box-shadow: 0 2px 5px rgba(60, 64, 67, 0.18) !important;
+    transform: none !important;
+}
+
+[data-testid="stFileUploaderDropzone"] button {
+    min-width: 118px;
+    font-size: 0 !important;
+    color: transparent !important;
+}
+
+[data-testid="stFileUploaderDropzone"] button::after {
+    content: "Choose file";
+    color: #334155;
+    font-size: 0.88rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+[data-testid="stHeaderActionElements"],
+[data-testid="stHeadingWithActionElements"] a {
+    display: none !important;
+}
 </style>
 """
 
