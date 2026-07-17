@@ -164,6 +164,33 @@ def save_decision_maker_preferences(user_id, preferences):
     return response.data[0]
 
 
+
+def get_communication_style(user_id):
+    response = (
+        get_database_client()
+        .table("communication_styles")
+        .select("*")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else {}
+
+
+def save_communication_style(user_id, style):
+    payload = {"user_id": user_id, **style}
+    response = (
+        get_database_client()
+        .table("communication_styles")
+        .upsert(payload, on_conflict="user_id")
+        .select("*")
+        .execute()
+    )
+    if not response.data:
+        raise RuntimeError("The communication style could not be saved.")
+    return response.data[0]
+
+
 def advance_onboarding(user_id, step):
     response = (
         get_database_client()

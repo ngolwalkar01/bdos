@@ -7,11 +7,13 @@ from services.database import (
     advance_onboarding,
     get_basic_profile,
     get_business_experience,
+    get_communication_style,
     get_decision_maker_preferences,
     get_opportunity_preferences,
     get_professional_experience,
     save_basic_profile,
     save_business_experience,
+    save_communication_style,
     save_decision_maker_preferences,
     save_opportunity_preferences,
     save_professional_experience,
@@ -102,6 +104,16 @@ DECISION_MAKER_OPTIONS = [
     "Founder", "CEO", "COO", "CTO", "CIO", "Head of Ecommerce",
     "Product Manager", "Operations Manager", "Engineering Manager", "HR",
     "Recruiter",
+]
+
+
+TONE_OPTIONS = [
+    "Professional", "Friendly", "Casual", "Technical", "Founder-to-Founder",
+    "Consultant", "Executive",
+]
+WRITING_LENGTH_OPTIONS = ["Short", "Medium", "Detailed"]
+COMMUNICATION_PREFERENCE_OPTIONS = [
+    "LinkedIn", "Email", "Proposal", "Cold Outreach",
 ]
 
 
@@ -672,6 +684,70 @@ def render_decision_maker_preferences(user, existing):
         st.code(str(error))
 
 
+
+def render_communication_style(user, existing):
+    st.markdown('<span class="bdos-eyebrow">Step 6 of 7</span>', unsafe_allow_html=True)
+    st.markdown(
+        '<h2 class="bdos-page-heading" style="font-size:2.15rem">Define your communication style</h2>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="bdos-page-copy">Teach the AI how your outreach, proposals, and professional messages should sound.</p>',
+        unsafe_allow_html=True,
+    )
+    with st.form("communication_style_form"):
+        tone = st.selectbox(
+            "Preferred Tone *",
+            TONE_OPTIONS,
+            index=select_index(TONE_OPTIONS, existing.get("tone")),
+            help="Choose the voice that should guide AI-generated writing.",
+        )
+        writing_length = st.segmented_control(
+            "Writing Length *",
+            WRITING_LENGTH_OPTIONS,
+            default=existing.get("writing_length") or "Medium",
+            selection_mode="single",
+        )
+        communication_preferences = st.multiselect(
+            "Communication Preference *",
+            COMMUNICATION_PREFERENCE_OPTIONS,
+            default=existing.get("communication_preferences") or [],
+            help="Select every format you expect the app to help you create.",
+        )
+        draft_column, continue_column = st.columns(2)
+        with draft_column:
+            save_draft = st.form_submit_button("Save Draft", use_container_width=True)
+        with continue_column:
+            save_continue = st.form_submit_button(
+                "Save & Continue", type="primary", use_container_width=True
+            )
+    if not save_draft and not save_continue:
+        return
+    style = {
+        "tone": tone,
+        "writing_length": writing_length,
+        "communication_preferences": communication_preferences,
+    }
+    if save_continue and not style["writing_length"]:
+        st.error("Select a Writing Length.")
+        return
+    if save_continue and not style["communication_preferences"]:
+        st.error("Select at least one Communication Preference.")
+        return
+    try:
+        save_communication_style(user["id"], style)
+        if save_continue:
+            advance_onboarding(user["id"], 6)
+            st.session_state["edit_communication_style"] = False
+            st.success("Communication Style completed.")
+            st.rerun()
+        else:
+            st.success("Draft saved.")
+    except Exception as error:
+        st.error("Your Communication Style could not be saved.")
+        st.code(str(error))
+
+
 def render_review_menu(completed_steps):
     if completed_steps < 1:
         return
@@ -689,6 +765,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_business_experience"] = False
                 st.session_state["edit_opportunity_preferences"] = False
                 st.session_state["edit_decision_maker_preferences"] = False
+                st.session_state["edit_communication_style"] = False
                 st.rerun()
 
             if completed_steps >= 2 and st.button(
@@ -701,6 +778,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_business_experience"] = False
                 st.session_state["edit_opportunity_preferences"] = False
                 st.session_state["edit_decision_maker_preferences"] = False
+                st.session_state["edit_communication_style"] = False
                 st.rerun()
 
             if completed_steps >= 3 and st.button(
@@ -713,6 +791,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_business_experience"] = True
                 st.session_state["edit_opportunity_preferences"] = False
                 st.session_state["edit_decision_maker_preferences"] = False
+                st.session_state["edit_communication_style"] = False
                 st.rerun()
 
             if completed_steps >= 4 and st.button(
@@ -725,6 +804,7 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_business_experience"] = False
                 st.session_state["edit_opportunity_preferences"] = True
                 st.session_state["edit_decision_maker_preferences"] = False
+                st.session_state["edit_communication_style"] = False
                 st.rerun()
 
             if completed_steps >= 5 and st.button(
@@ -735,6 +815,20 @@ def render_review_menu(completed_steps):
                 st.session_state["edit_business_experience"] = False
                 st.session_state["edit_opportunity_preferences"] = False
                 st.session_state["edit_decision_maker_preferences"] = True
+                st.session_state["edit_communication_style"] = False
+                st.rerun()
+
+            if completed_steps >= 6 and st.button(
+                "Communication Style",
+                key="review_communication_style",
+                use_container_width=True,
+            ):
+                st.session_state["edit_basic_profile"] = False
+                st.session_state["edit_professional_experience"] = False
+                st.session_state["edit_business_experience"] = False
+                st.session_state["edit_opportunity_preferences"] = False
+                st.session_state["edit_decision_maker_preferences"] = False
+                st.session_state["edit_communication_style"] = True
                 st.rerun()
 
 def render_onboarding(user):
@@ -749,6 +843,9 @@ def render_onboarding(user):
     )
     editing_decision_makers = st.session_state.get(
         "edit_decision_maker_preferences", False
+    )
+    editing_communication = st.session_state.get(
+        "edit_communication_style", False
     )
 
     with st.container(key="onboarding_topbar"):
@@ -842,10 +939,28 @@ def render_onboarding(user):
                             st.session_state["edit_decision_maker_preferences"] = False
                             st.rerun()
                     else:
-                        with st.container(key="coming_soon_card"):
-                            st.markdown('<span class="bdos-eyebrow">Step 6 of 7</span>', unsafe_allow_html=True)
-                            st.header("Communication Style")
-                            st.info("Coming in Phase 7")
+                        try:
+                            communication_style = get_communication_style(user["id"])
+                        except Exception as error:
+                            st.error(
+                                "Phase 7 database migration is required before Step 6 can continue."
+                            )
+                            st.code(str(error))
+                            return
+                        if current_step == 5 or editing_communication:
+                            with st.container(key="onboarding_card"):
+                                render_communication_style(user, communication_style)
+                            if editing_communication and st.button("Return to current step"):
+                                st.session_state["edit_communication_style"] = False
+                                st.rerun()
+                        else:
+                            with st.container(key="coming_soon_card"):
+                                st.markdown(
+                                    '<span class="bdos-eyebrow">Step 7 of 7</span>',
+                                    unsafe_allow_html=True,
+                                )
+                                st.header("Business DNA Review")
+                                st.info("Coming in Phase 8")
 
     st.divider()
     if st.button("Log out"):
