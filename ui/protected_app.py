@@ -357,7 +357,6 @@ def render_review_menu(completed_steps):
     with review_column:
         with st.popover(
             "Review & edit",
-            icon=":material/edit:",
             use_container_width=True,
         ):
             st.caption("Completed sections")
