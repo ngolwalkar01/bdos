@@ -18,7 +18,7 @@ GLOBAL_CSS = """
     --bdos-shadow: 0 24px 70px rgba(15, 23, 42, 0.11);
 }
 
-html, body, [class*="st-"] {
+html, body, [data-testid="stAppViewContainer"] {
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
         "Segoe UI", sans-serif;
 }
