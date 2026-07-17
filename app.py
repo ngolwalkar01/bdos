@@ -9,10 +9,17 @@ from services.auth import auth_enabled, require_authenticated_user
 from services.config import get_secret
 from services.database import ensure_user
 from ui.protected_app import render_dashboard, render_onboarding
+from ui.theme import apply_theme
 
 load_dotenv()
 
-st.set_page_config(page_title="LinkedIn BD Agent", layout="wide")
+st.set_page_config(
+    page_title="BusinessDev OS",
+    page_icon="↗",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+apply_theme()
 
 
 openai_api_key = get_secret("OPENAI_API_KEY")

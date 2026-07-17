@@ -4,6 +4,7 @@ from zoneinfo import available_timezones
 import streamlit as st
 
 from services.database import advance_onboarding, get_basic_profile, save_basic_profile, upload_resume
+from ui.theme import brand_wordmark
 
 
 STEPS = [
@@ -39,16 +40,35 @@ def valid_url(value, required_host=None):
 
 def render_progress(completed):
     completed = max(0, min(int(completed or 0), 7))
-    st.progress(completed / 7, text=f"Onboarding: {completed} of 7 steps completed")
-    columns = st.columns(7)
-    for number, (column, label) in enumerate(zip(columns, STEPS), start=1):
-        column.markdown(f"**{'✓' if number <= completed else number}**")
-        column.caption(label)
+    items = []
+    for number, label in enumerate(STEPS, start=1):
+        state = "done" if number <= completed else ""
+        if number == completed + 1:
+            state = "active"
+        marker = "&#10003;" if number <= completed else str(number)
+        items.append(
+            f'<div class="onboarding-step {state}">'
+            f'<div class="step-dot">{marker}</div>'
+            f"<span>{label}</span></div>"
+        )
+
+    st.markdown(
+        '<div class="onboarding-progress">' + "".join(items) + "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_basic_profile(user, existing):
-    st.header("Step 1 - Basic Profile")
-    st.write("Create the professional identity used throughout your Business DNA.")
+    st.markdown('<span class="bdos-eyebrow">Step 1 of 7</span>', unsafe_allow_html=True)
+    st.markdown(
+        '<h2 class="bdos-page-heading" style="font-size:2.15rem">Build your basic profile</h2>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="bdos-page-copy">Create the professional identity used throughout '
+        "your Business DNA and opportunity recommendations.</p>",
+        unsafe_allow_html=True,
+    )
 
     timezones = sorted(available_timezones())
     saved_timezone = existing.get("preferred_timezone") or "Asia/Kolkata"
@@ -172,7 +192,21 @@ def render_onboarding(user):
     current_step = int(user.get("onboarding_step") or 0)
     editing = st.session_state.get("edit_basic_profile", False)
 
-    st.title("Professional Onboarding")
+    with st.container(key="onboarding_topbar"):
+        brand_wordmark()
+    st.markdown(
+        '<span class="bdos-eyebrow">Personalized setup</span>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<h1 class="bdos-page-heading">Shape your professional Business DNA.</h1>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="bdos-page-copy">A focused seven-step setup that teaches the app '
+        "what you do, where you create value, and which opportunities fit you.</p>",
+        unsafe_allow_html=True,
+    )
     render_progress(current_step)
 
     try:
@@ -199,7 +233,8 @@ def render_onboarding(user):
                 st.logout()
         return
 
-    render_basic_profile(user, existing)
+    with st.container(key="onboarding_card"):
+        render_basic_profile(user, existing)
 
     if editing and st.button("Cancel editing"):
         st.session_state["edit_basic_profile"] = False
@@ -212,7 +247,8 @@ def render_onboarding(user):
 
 def render_dashboard(user):
     with st.sidebar:
-        st.markdown(f"### {user.get('full_name') or 'User'}")
+        brand_wordmark()
+        st.caption(user.get("full_name") or "User")
         selected = st.radio("Navigation", NAVIGATION, label_visibility="collapsed")
         st.divider()
         if st.button("Log out", use_container_width=True):
