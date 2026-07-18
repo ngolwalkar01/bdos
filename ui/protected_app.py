@@ -25,6 +25,12 @@ from services.database import (
     upload_resume,
 )
 from ui.theme import brand_wordmark
+from frontend.dashboard import (
+    render_business_dna,
+    render_coming_soon,
+    render_discover,
+    render_home,
+)
 
 
 STEPS = [
@@ -38,13 +44,13 @@ STEPS = [
 ]
 
 NAVIGATION = [
-    "Dashboard",
-    "Discover Businesses",
-    "My Companies",
-    "Decision Makers",
+    "Home",
+    "Discover",
+    "Relationships",
     "Outreach",
-    "Freelance Jobs",
-    "Analytics",
+    "Proposals",
+    "Intelligence",
+    "Business DNA",
     "Settings",
 ]
 SKILL_OPTIONS = [
@@ -1102,11 +1108,11 @@ def render_dashboard(user):
         if st.button("Log out", use_container_width=True):
             st.logout()
 
-    if selected == "Dashboard":
-        st.title("Dashboard")
-        st.write("Your personalized opportunity dashboard is being prepared.")
-        st.info("Complete onboarding to generate your Business DNA.")
-        return
-
-    st.title(selected)
-    st.info("Coming soon")
+    if selected == "Home":
+        render_home(user)
+    elif selected == "Discover":
+        render_discover(user)
+    elif selected == "Business DNA":
+        render_business_dna(user)
+    else:
+        render_coming_soon(selected)
