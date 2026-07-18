@@ -35,10 +35,13 @@ html, body, [data-testid="stAppViewContainer"] {
     background: transparent;
 }
 
-[data-testid="stToolbar"],
 #MainMenu,
 footer {
     visibility: hidden;
+}
+
+[data-testid="stToolbar"] {
+    visibility: visible !important;
 }
 
 .block-container {
@@ -501,14 +504,20 @@ button[data-testid="stBaseButton-primaryFormSubmit"] span {
 .sidebar-user-copy small { color:#718096;font-size:.65rem; }
 .st-key-sidebar_logout button { min-height:38px !important;margin-top:.45rem;color:#94a3b8 !important;border-color:rgba(148,163,184,.14) !important;background:transparent !important;font-size:.76rem; }
 [data-testid="stSidebarCollapseButton"] button { color:#cbd5e1 !important;border-radius:9px !important;background:rgba(255,255,255,.08) !important; }
-[data-testid="stSidebarCollapsedControl"] {
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
     position:fixed !important;z-index:999999 !important;top:1rem !important;left:1rem !important;
     display:flex !important;visibility:visible !important;opacity:1 !important;
 }
-[data-testid="stSidebarCollapsedControl"] button {
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="collapsedControl"] button {
     width:42px !important;height:42px !important;color:#fff !important;border:1px solid rgba(129,140,248,.42) !important;
     border-radius:12px !important;background:linear-gradient(135deg,#4f46e5,#3730a3) !important;
     box-shadow:0 10px 28px rgba(49,46,129,.32) !important;
+}
+button[data-testid="stBaseButton-headerNoPadding"] {
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 </style>
