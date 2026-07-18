@@ -5,16 +5,30 @@ from backend.discovery_engine.strategy import generate_discovery_strategy
 from services.database import get_business_dna_profile
 
 
-def render_home(user):
+def ensure_strategy(repository, client, dna):
+    active = repository.active_strategy()
+    if active:
+        return active
+    if not dna.get("profile"):
+        raise RuntimeError("Business DNA is required before opportunity discovery can start.")
+    strategy = generate_discovery_strategy(client, dna)
+    return repository.save_strategy(strategy)
+
+
+def render_home(user, openai_client):
     first_name = (user.get("full_name") or "there").split()[0]
     st.markdown('<span class="bdos-eyebrow">BusinessDev OS</span>', unsafe_allow_html=True)
     st.title(f"Good morning, {first_name}")
     st.caption("Your opportunity intelligence workspace")
     try:
-        overview = DiscoveryRepository(user["id"]).overview()
+        repository = DiscoveryRepository(user["id"])
+        overview = repository.overview()
         dna = get_business_dna_profile(user["id"])
+        if not repository.active_strategy() and dna.get("profile") and openai_client:
+            with st.spinner("Preparing your private opportunity discovery profile..."):
+                ensure_strategy(repository, openai_client, dna)
     except Exception as error:
-        st.error("The Discovery Foundation database migration is required.")
+        st.error("Your opportunity workspace could not be prepared.")
         st.code(str(error))
         return
     columns = st.columns(4)
@@ -23,69 +37,33 @@ def render_home(user):
     columns[2].metric("Saved", overview["saved"])
     columns[3].metric("Total Discovered", overview["total"])
     st.markdown("### Recommended opportunities")
-    st.info("Your first recommendations will appear after a Discovery Strategy is generated and run.")
+    st.info("Your highest-value opportunities will appear here as discovery runs complete.")
 
 
-def _render_strategy_list(label, values):
-    with st.container(border=True):
-        st.markdown(f"#### {label}")
-        st.markdown(" · ".join(values)) if values else st.caption("Not specified")
-
-
-def render_discover(user, openai_client):
-    st.markdown('<span class="bdos-eyebrow">Discovery Engine</span>', unsafe_allow_html=True)
-    st.title("Discover opportunities")
-    st.write("BusinessDev OS builds this strategy directly from your Business DNA.")
+def render_opportunities(user, openai_client):
+    st.markdown('<span class="bdos-eyebrow">Opportunity Feed</span>', unsafe_allow_html=True)
+    st.title("Opportunities")
+    st.write("Relevant opportunities selected from your Business DNA, preferences, and experience.")
     try:
         repository = DiscoveryRepository(user["id"])
-        active = repository.active_strategy()
         dna = get_business_dna_profile(user["id"])
+        if not repository.active_strategy():
+            with st.spinner("Preparing your opportunity discovery profile..."):
+                ensure_strategy(repository, openai_client, dna)
         opportunities = repository.recent_opportunities()
     except Exception as error:
-        st.error("The Discovery Foundation database migration is required.")
+        st.error("Your opportunity feed could not be prepared.")
         st.code(str(error))
         return
-    strategy = active.get("strategy") or {}
-    label = "Regenerate Discovery Strategy" if strategy else "Generate Discovery Strategy"
-    if st.button(label, type="secondary" if strategy else "primary", use_container_width=True):
-        if not dna.get("profile"):
-            st.error("Generate your Business DNA before creating a Discovery Strategy.")
-        else:
-            try:
-                with st.spinner("Building a focused strategy from your Business DNA..."):
-                    repository.save_strategy(generate_discovery_strategy(openai_client, dna))
-                st.rerun()
-            except Exception as error:
-                st.error("Your Discovery Strategy could not be generated.")
-                st.code(str(error))
-    if strategy:
-        st.caption(f"Active strategy v{active.get('version',1)} · {len(strategy.get('search_queries',[]))} discovery queries")
-        left,right=st.columns(2)
-        with left:
-            _render_strategy_list("Industries",strategy.get("industries"))
-            _render_strategy_list("Business Models",strategy.get("business_models"))
-            _render_strategy_list("Countries",strategy.get("countries"))
-            _render_strategy_list("Decision Makers",strategy.get("decision_makers"))
-        with right:
-            _render_strategy_list("Keywords",strategy.get("keywords"))
-            _render_strategy_list("Company Sizes",strategy.get("company_sizes"))
-            _render_strategy_list("Opportunity Titles",strategy.get("job_titles"))
-            _render_strategy_list("Priority Sources",strategy.get("priority_sources"))
-        with st.expander(f"Search queries ({len(strategy.get('search_queries',[]))})"):
-            for query in strategy.get("search_queries",[]):
-                st.code(query)
-        with st.expander("Negative keywords"):
-            st.write(" · ".join(strategy.get("negative_keywords",[])) or "None")
-    else:
-        st.info("Generate a strategy to translate your Business DNA into discovery targets and queries.")
-    st.divider()
-    st.markdown("### Discovered opportunities")
     if not opportunities:
-        st.info("No opportunities yet. Multi-source discovery arrives in Phase 2C.")
+        st.info("Your opportunity feed is ready for multi-source discovery in Phase 2C.")
         return
     for opportunity in opportunities:
         with st.container(border=True):
-            st.subheader(opportunity.get("company_name") or "Unknown company")
+            scores = opportunity.get("opportunity_scores") or []
+            score = scores[0].get("score") if scores else None
+            title = opportunity.get("company_name") or "Unknown company"
+            st.subheader(f"{title}{f' · {score}/100' if score is not None else ''}")
             st.write(opportunity.get("title") or "Opportunity")
             st.caption(f"{opportunity.get('source','')} - {opportunity.get('country') or 'Location unknown'}")
 
@@ -103,15 +81,44 @@ def render_business_dna(user):
         st.info("No Business DNA has been generated yet.")
         return
     for label, key in [
-        ("Identity", "identity"), ("Recommended Positioning", "recommended_positioning"),
-        ("Skills", "skills"), ("Industries", "industries"),
-        ("Ideal Opportunities", "ideal_opportunities"), ("Writing Style", "writing_style"),
+        ("Identity","identity"),("Recommended Positioning","recommended_positioning"),
+        ("Skills","skills"),("Industries","industries"),
+        ("Ideal Opportunities","ideal_opportunities"),("Writing Style","writing_style"),
     ]:
         with st.container(border=True):
             st.markdown(f"#### {label}")
             st.write(profile.get(key) or "Not available")
 
 
-def render_coming_soon(section):
-    st.title(section)
-    st.info("Coming soon in the frozen V1 roadmap.")
+def render_settings(user, openai_client):
+    st.markdown('<span class="bdos-eyebrow">Preferences</span>', unsafe_allow_html=True)
+    st.title("Settings")
+    st.write("Manage your account and opportunity-discovery preferences.")
+    try:
+        repository = DiscoveryRepository(user["id"])
+        active = repository.active_strategy()
+        dna = get_business_dna_profile(user["id"])
+    except Exception as error:
+        st.error("Settings could not be loaded.")
+        st.code(str(error))
+        return
+    with st.expander("Advanced discovery settings"):
+        st.caption("Normally managed automatically from your Business DNA.")
+        strategy = active.get("strategy") or {}
+        if strategy:
+            st.write(f"Discovery profile version: {active.get('version',1)}")
+            st.write(f"Configured search paths: {len(strategy.get('search_queries',[]))}")
+            st.write("Priority sources: " + ", ".join(strategy.get("priority_sources",[])))
+            if st.checkbox("Show technical discovery queries"):
+                for query in strategy.get("search_queries",[]):
+                    st.code(query)
+        else:
+            st.info("The discovery profile will be created automatically.")
+        if st.button("Regenerate discovery profile", use_container_width=True):
+            try:
+                with st.spinner("Refreshing your discovery profile..."):
+                    repository.save_strategy(generate_discovery_strategy(openai_client, dna))
+                st.rerun()
+            except Exception as error:
+                st.error("The discovery profile could not be regenerated.")
+                st.code(str(error))

@@ -28,8 +28,8 @@ from services.database import (
 from ui.theme import brand_wordmark
 from frontend.dashboard import (
     render_business_dna,
-    render_coming_soon,
-    render_discover,
+    render_opportunities,
+    render_settings,
     render_home,
 )
 
@@ -46,21 +46,13 @@ STEPS = [
 
 NAVIGATION = [
     "Home",
-    "Discover",
-    "Relationships",
-    "Outreach",
-    "Proposals",
-    "Intelligence",
+    "Opportunities",
     "Business DNA",
     "Settings",
 ]
 NAVIGATION_LABELS = {
     "Home": "⌂  Home",
-    "Discover": "⌕  Discover",
-    "Relationships": "◇  Relationships",
-    "Outreach": "↗  Outreach",
-    "Proposals": "▤  Proposals",
-    "Intelligence": "▥  Intelligence",
+    "Opportunities": "⌕  Opportunities",
     "Business DNA": "✦  Business DNA",
     "Settings": "⚙  Settings",
 }
@@ -1136,10 +1128,10 @@ def render_dashboard(user, openai_client=None):
             st.logout()
 
     if selected == "Home":
-        render_home(user)
-    elif selected == "Discover":
-        render_discover(user, openai_client)
+        render_home(user, openai_client)
+    elif selected == "Opportunities":
+        render_opportunities(user, openai_client)
     elif selected == "Business DNA":
         render_business_dna(user)
-    else:
-        render_coming_soon(selected)
+    elif selected == "Settings":
+        render_settings(user, openai_client)
