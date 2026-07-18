@@ -1,4 +1,5 @@
 import json
+from html import escape
 
 from urllib.parse import urlparse
 from zoneinfo import available_timezones
@@ -53,6 +54,16 @@ NAVIGATION = [
     "Business DNA",
     "Settings",
 ]
+NAVIGATION_LABELS = {
+    "Home": "⌂  Home",
+    "Discover": "⌕  Discover",
+    "Relationships": "◇  Relationships",
+    "Outreach": "↗  Outreach",
+    "Proposals": "▤  Proposals",
+    "Intelligence": "▥  Intelligence",
+    "Business DNA": "✦  Business DNA",
+    "Settings": "⚙  Settings",
+}
 SKILL_OPTIONS = [
     "WordPress", "WooCommerce", "PHP", "Python", "JavaScript", "TypeScript",
     "SQL", "REST APIs", "GraphQL", "Ecommerce", "Subscription Commerce",
@@ -1101,11 +1112,27 @@ def render_onboarding(user, openai_client=None):
 
 def render_dashboard(user):
     with st.sidebar:
-        brand_wordmark()
-        st.caption(user.get("full_name") or "User")
-        selected = st.radio("Navigation", NAVIGATION, label_visibility="collapsed")
-        st.divider()
-        if st.button("Log out", use_container_width=True):
+        with st.container(key="sidebar_brand"):
+            brand_wordmark()
+            st.caption("Opportunity Intelligence")
+        st.markdown('<div class="sidebar-section-label">Workspace</div>', unsafe_allow_html=True)
+        selected = st.radio(
+            "Navigation",
+            NAVIGATION,
+            format_func=lambda item: NAVIGATION_LABELS[item],
+            label_visibility="collapsed",
+            key="dashboard_navigation",
+        )
+        full_name = escape(user.get("full_name") or "BusinessDev User")
+        email = escape(user.get("email") or "Private workspace")
+        initial = escape(full_name[:1].upper())
+        st.markdown(
+            f'<div class="sidebar-user"><span class="sidebar-avatar">{initial}</span>'
+            f'<span class="sidebar-user-copy"><strong>{full_name}</strong>'
+            f'<small>{email}</small></span></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Log out", use_container_width=True, key="sidebar_logout"):
             st.logout()
 
     if selected == "Home":
