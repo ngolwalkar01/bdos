@@ -4,6 +4,7 @@ from backend.discovery_engine.repository import DiscoveryRepository
 from backend.discovery_engine.strategy import generate_discovery_strategy
 from backend.discovery_engine.service import run_discovery
 from backend.research_engine.service import research_candidates
+from backend.qualification_engine.candidate import qualify_researched_candidates
 from services.database import get_business_dna_profile
 
 
@@ -63,12 +64,18 @@ def render_opportunities(user, openai_client, tavily_client):
             with st.spinner("Searching selected sources and removing duplicates..."):
                 result = run_discovery(repository, active_strategy, tavily_client, openai_client, dna)
                 research = research_candidates(repository, tavily_client, openai_client, dna, limit=5)
+                qualification_counts = qualify_researched_candidates(repository, openai_client, dna, limit=10)
             if result["errors"]:
                 st.warning(f"Found {result['count']} opportunities. Some sources were unavailable.")
             else:
                 st.success(f"Found and stored {result['count']} opportunities.")
             if research["researched"]:
                 st.caption(f"Privately researched {research['researched']} web candidates; rejected {research['rejected']} non-target/service-provider results.")
+            if any(qualification_counts.values()):
+                st.caption(
+                    f"Private qualification: {qualification_counts['qualified']} qualified, "
+                    f"{qualification_counts['needs_review']} need review, and {qualification_counts['rejected']} rejected."
+                )
             st.rerun()
         except Exception as error:
             st.error("Opportunity discovery could not be completed.")
@@ -85,10 +92,11 @@ def render_opportunities(user, openai_client, tavily_client):
             st.subheader(f"{title}{f' · {score}/100' if score is not None else ''}")
             st.write(opportunity.get("title") or "Opportunity")
             st.caption(f"{opportunity.get('source','')} - {opportunity.get('country') or 'Location unknown'}")
-            qualification = (opportunity.get("raw_data") or {}).get("business_dna_qualification") or {}
+            raw_data = opportunity.get("raw_data") or {}
+            qualification = raw_data.get("business_dna_qualification") or raw_data.get("candidate_qualification") or {}
             if qualification:
-                st.markdown(f"**Business DNA fit: {qualification.get('fit_score', 0)}/100**")
-                for reason in qualification.get("fit_reasons", []):
+                st.markdown(f"**Business DNA fit: {qualification.get('fit_score', qualification.get('score', 0))}/100**")
+                for reason in qualification.get("fit_reasons", qualification.get("reasons", [])):
                     st.write(f"✓ {reason}")
             if opportunity.get("source_url"):
                 st.link_button(f"View on {opportunity.get('source') or 'source'}", opportunity["source_url"])
@@ -144,6 +152,12 @@ def render_settings(user, openai_client):
             columns[0].metric("Awaiting research", candidate_counts["pending"])
             columns[1].metric("Target businesses", candidate_counts["researched"])
             columns[2].metric("Rejected noise", candidate_counts["rejected"])
+            qualification_counts = repository.qualification_overview()
+            st.markdown("#### Private qualification gate")
+            columns = st.columns(3)
+            columns[0].metric("Qualified", qualification_counts["qualified"])
+            columns[1].metric("Needs review", qualification_counts["needs_review"])
+            columns[2].metric("Rejected", qualification_counts["rejected"])
         else:
             st.info("The discovery profile will be created automatically.")
         if st.button("Regenerate discovery profile", use_container_width=True):

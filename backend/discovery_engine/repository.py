@@ -71,5 +71,66 @@ class DiscoveryRepository:
         rows=response.data or []
         return {"pending":sum(x.get("status")=="pending" for x in rows),"rejected":sum(x.get("status")=="rejected" for x in rows),"researched":sum(x.get("status")=="promoted" for x in rows)}
 
+    def researched_candidates_for_qualification(self, limit=10):
+        candidates = (self.client.table("discovery_candidates")
+            .select("id,discovery_run_id,source,source_url,title,snippet,raw_data")
+            .eq("user_id", self.user_id).eq("status", "promoted")
+            .order("updated_at", desc=True).limit(100).execute())
+        candidate_rows = candidates.data or []
+        if not candidate_rows:
+            return []
+        qualified = (self.client.table("candidate_qualifications").select("candidate_id")
+            .in_("candidate_id", [row["id"] for row in candidate_rows]).execute())
+        processed = {row["candidate_id"] for row in (qualified.data or [])}
+        rows = [row for row in candidate_rows if row["id"] not in processed][:limit]
+        if not rows:
+            return []
+        profiles = (self.client.table("candidate_research_profiles")
+            .select("candidate_id,status,profile,evidence").in_("candidate_id", [row["id"] for row in rows])
+            .eq("status", "completed").execute())
+        by_candidate = {row["candidate_id"]: row for row in (profiles.data or [])}
+        return [
+            {**row, "research_profile": by_candidate[row["id"]].get("profile") or {},
+             "research_evidence": by_candidate[row["id"]].get("evidence") or []}
+            for row in rows if row["id"] in by_candidate
+        ]
+
+    def save_candidate_qualification(self, candidate_id, decision, engine_version):
+        payload = {
+            "candidate_id": candidate_id, "verdict": decision["verdict"],
+            "score": decision["score"], "dimensions": decision.get("dimensions") or {},
+            "reasons": decision.get("fit_reasons") or [], "risks": decision.get("risk_signals") or [],
+            "missing_data": decision.get("missing_data") or [],
+            "opportunity": decision.get("opportunity") or {}, "engine_version": engine_version,
+        }
+        return self.client.table("candidate_qualifications").upsert(payload, on_conflict="candidate_id").execute().data or []
+
+    def promote_candidate(self, candidate, decision):
+        profile = candidate.get("research_profile") or {}
+        opportunity = decision.get("opportunity") or {}
+        payload = {
+            "user_id": self.user_id, "discovery_run_id": candidate.get("discovery_run_id"),
+            "external_key": str(candidate["id"]),
+            "title": opportunity.get("title") or candidate.get("title") or "Qualified opportunity",
+            "company_name": profile.get("company_name") or candidate.get("title") or "Unknown company",
+            "source": "Researched Company", "source_url": candidate["source_url"],
+            "opportunity_type": opportunity.get("type") or "Business Opportunity",
+            "country": profile.get("country"), "summary": opportunity.get("summary") or candidate.get("snippet"),
+            "status": "qualified", "raw_data": {
+                "research_profile": profile, "research_evidence": candidate.get("research_evidence") or [],
+                "candidate_qualification": decision,
+            },
+        }
+        return self.client.table("opportunities").upsert(payload, on_conflict="user_id,source,source_url").execute().data or []
+
+    def qualification_overview(self):
+        candidates = self.client.table("discovery_candidates").select("id").eq("user_id", self.user_id).execute()
+        candidate_ids = [row["id"] for row in (candidates.data or [])]
+        if not candidate_ids:
+            return {"qualified": 0, "needs_review": 0, "rejected": 0}
+        response = self.client.table("candidate_qualifications").select("verdict").in_("candidate_id", candidate_ids).execute()
+        rows = response.data or []
+        return {key: sum(row.get("verdict") == key for row in rows) for key in ("qualified", "needs_review", "rejected")}
+
     def finish_run(self, run_id, status, count, errors):
         return self.client.table("discovery_runs").update({"status":status,"discovered_count":count,"errors":errors,"completed_at":datetime.now(timezone.utc).isoformat()}).eq("id",run_id).execute().data
