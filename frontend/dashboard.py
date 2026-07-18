@@ -69,7 +69,7 @@ def render_opportunities(user, openai_client, tavily_client):
         except Exception as error:
             st.error("Opportunity discovery could not be completed.")
             st.code(str(error))
-    st.caption("Uses up to 5 public-web searches per run, plus Remotive and RemoteOK feeds.")
+    st.caption("The feed contains direct listings only. Raw web matches remain private candidates until researched and qualified.")
     if not opportunities:
         st.info("No opportunities yet. Run discovery to build your personalized feed.")
         return

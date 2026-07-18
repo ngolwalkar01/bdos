@@ -17,7 +17,7 @@ class DiscoveryRepository:
 
     def recent_opportunities(self, limit=12):
         response = (self.client.table("opportunities").select("*,opportunity_scores(score,confidence)")
-            .eq("user_id",self.user_id).order("discovered_at",desc=True).limit(limit).execute())
+            .eq("user_id",self.user_id).in_("status", ["new","saved","qualified"]).neq("source","Public Web").order("discovered_at",desc=True).limit(limit).execute())
         return response.data or []
 
     def active_strategy(self):
@@ -46,6 +46,12 @@ class DiscoveryRepository:
             return []
         payload=[{"user_id":self.user_id,"discovery_run_id":run_id,**item} for item in opportunities]
         return self.client.table("opportunities").upsert(payload,on_conflict="user_id,source,source_url").execute().data or []
+
+    def upsert_candidates(self, run_id, candidates):
+        if not candidates:
+            return []
+        payload=[{"user_id":self.user_id,"discovery_run_id":run_id,**item} for item in candidates]
+        return self.client.table("discovery_candidates").upsert(payload,on_conflict="user_id,source,source_url").execute().data or []
 
     def finish_run(self, run_id, status, count, errors):
         return self.client.table("discovery_runs").update({"status":status,"discovered_count":count,"errors":errors,"completed_at":datetime.now(timezone.utc).isoformat()}).eq("id",run_id).execute().data

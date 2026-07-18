@@ -1,6 +1,8 @@
 import re
 import requests
 
+from backend.discovery_engine.relevance import direct_listing_evidence
+
 HEADERS = {"User-Agent": "BusinessDevOS/1.0 (+https://businessdevos.streamlit.app/)"}
 
 
@@ -13,13 +15,13 @@ def _matches(text, strategy):
     return any(signal.lower() in text.lower() for signal in signals if signal)
 
 
-def discover_public_web(strategy, client, query_limit=5):
+def discover_public_web_candidates(strategy, client, query_limit=5):
     items = []
     for query in strategy.get("search_queries", [])[:query_limit]:
         for result in client.search(query=query, search_depth="basic", max_results=5).get("results", []):
             if result.get("url"):
                 title = result.get("title") or "Business opportunity"
-                items.append({"title": title, "company_name": title.split("|")[0].split("-")[0].strip(), "source": "Public Web", "source_url": result["url"], "opportunity_type": "Business Opportunity", "summary": result.get("content") or "", "external_key": result["url"], "raw_data": {"query": query, "search_score": result.get("score")}})
+                items.append({"title": title, "source": "Public Web", "source_url": result["url"], "snippet": result.get("content") or "", "raw_data": {"query": query, "search_score": result.get("score")}, "classification": {"reason": "raw_search_candidate", "promotable": False}, "status": "pending"})
     return items
 
 
@@ -29,8 +31,9 @@ def discover_remotive(strategy, limit=100):
     items = []
     for job in response.json().get("jobs", [])[:limit]:
         searchable = " ".join(str(job.get(key) or "") for key in ("title", "company_name", "category", "tags", "description"))
-        if _matches(searchable, strategy) and job.get("url"):
-            items.append({"title": job.get("title") or "Remote opportunity", "company_name": job.get("company_name") or "Unknown company", "source": "Remotive", "source_url": job["url"], "opportunity_type": job.get("job_type") or "Remote Job", "country": job.get("candidate_required_location"), "summary": _text(job.get("description"))[:1200], "external_key": str(job.get("id") or job["url"]), "raw_data": {"category": job.get("category"), "tags": job.get("tags", [])}})
+        evidence = direct_listing_evidence(job.get("title"), job.get("tags"), job.get("description"), strategy)
+        if evidence["accepted"] and job.get("url"):
+            items.append({"title": job.get("title") or "Remote opportunity", "company_name": job.get("company_name") or "Unknown company", "source": "Remotive", "source_url": job["url"], "opportunity_type": job.get("job_type") or "Remote Job", "country": job.get("candidate_required_location"), "summary": _text(job.get("description"))[:1200], "external_key": str(job.get("id") or job["url"]), "raw_data": {"category": job.get("category"), "tags": job.get("tags", []), "relevance_evidence": evidence}})
     return items
 
 
@@ -43,6 +46,7 @@ def discover_remoteok(strategy, limit=100):
     for job in jobs[:limit]:
         searchable = " ".join(str(job.get(key) or "") for key in ("position", "company", "tags", "description", "location"))
         url = job.get("url") or (f"https://remoteok.com/remote-jobs/{job.get('id')}" if job.get("id") else None)
-        if _matches(searchable, strategy) and url:
-            items.append({"title": job.get("position") or "Remote opportunity", "company_name": job.get("company") or "Unknown company", "source": "RemoteOK", "source_url": url, "opportunity_type": "Remote Job", "country": job.get("location"), "summary": _text(job.get("description"))[:1200], "external_key": str(job.get("id") or url), "raw_data": {"tags": job.get("tags", []), "salary_min": job.get("salary_min"), "salary_max": job.get("salary_max")}})
+        evidence = direct_listing_evidence(job.get("position"), job.get("tags"), job.get("description"), strategy)
+        if evidence["accepted"] and url:
+            items.append({"title": job.get("position") or "Remote opportunity", "company_name": job.get("company") or "Unknown company", "source": "RemoteOK", "source_url": url, "opportunity_type": "Remote Job", "country": job.get("location"), "summary": _text(job.get("description"))[:1200], "external_key": str(job.get("id") or url), "raw_data": {"tags": job.get("tags", []), "salary_min": job.get("salary_min"), "salary_max": job.get("salary_max"), "relevance_evidence": evidence}})
     return items

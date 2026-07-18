@@ -1,4 +1,4 @@
-from backend.discovery_engine.adapters import discover_public_web, discover_remoteok, discover_remotive
+from backend.discovery_engine.adapters import discover_public_web_candidates, discover_remoteok, discover_remotive
 
 SOURCES = ("Public Web", "Remotive", "RemoteOK")
 
@@ -9,7 +9,12 @@ def run_discovery(repository, active_strategy, tavily_client):
         raise ValueError("An active Discovery Strategy is required.")
     run = repository.start_run(active_strategy["id"], list(SOURCES))
     results, errors = [], []
-    for source, adapter in (("Public Web", lambda: discover_public_web(strategy, tavily_client)), ("Remotive", lambda: discover_remotive(strategy)), ("RemoteOK", lambda: discover_remoteok(strategy))):
+    try:
+        candidates = discover_public_web_candidates(strategy, tavily_client)
+        repository.upsert_candidates(run["id"], candidates)
+    except Exception as error:
+        errors.append({"source": "Public Web", "message": str(error)})
+    for source, adapter in (("Remotive", lambda: discover_remotive(strategy)), ("RemoteOK", lambda: discover_remoteok(strategy))):
         try:
             results.extend(adapter())
         except Exception as error:
