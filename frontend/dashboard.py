@@ -3,6 +3,7 @@ import streamlit as st
 from backend.discovery_engine.repository import DiscoveryRepository
 from backend.discovery_engine.strategy import generate_discovery_strategy
 from backend.discovery_engine.service import run_discovery
+from backend.research_engine.service import research_candidates
 from services.database import get_business_dna_profile
 
 
@@ -61,15 +62,18 @@ def render_opportunities(user, openai_client, tavily_client):
         try:
             with st.spinner("Searching selected sources and removing duplicates..."):
                 result = run_discovery(repository, active_strategy, tavily_client, openai_client, dna)
+                research = research_candidates(repository, tavily_client, openai_client, dna, limit=5)
             if result["errors"]:
                 st.warning(f"Found {result['count']} opportunities. Some sources were unavailable.")
             else:
                 st.success(f"Found and stored {result['count']} opportunities.")
+            if research["researched"]:
+                st.caption(f"Privately researched {research['researched']} web candidates; rejected {research['rejected']} non-target/service-provider results.")
             st.rerun()
         except Exception as error:
             st.error("Opportunity discovery could not be completed.")
             st.code(str(error))
-    st.caption("Only direct listings that pass strict Business DNA qualification at 80+ are shown.")
+    st.caption("Only direct listings that pass strict Business DNA qualification at 80+ are shown. Raw web candidates are researched privately.")
     if not opportunities:
         st.info("No opportunities yet. Run discovery to build your personalized feed.")
         return
@@ -134,6 +138,12 @@ def render_settings(user, openai_client):
             if st.checkbox("Show technical discovery queries"):
                 for query in strategy.get("search_queries",[]):
                     st.code(query)
+            candidate_counts = repository.candidate_overview()
+            st.markdown("#### Private research pipeline")
+            columns = st.columns(3)
+            columns[0].metric("Awaiting research", candidate_counts["pending"])
+            columns[1].metric("Target businesses", candidate_counts["researched"])
+            columns[2].metric("Rejected noise", candidate_counts["rejected"])
         else:
             st.info("The discovery profile will be created automatically.")
         if st.button("Regenerate discovery profile", use_container_width=True):

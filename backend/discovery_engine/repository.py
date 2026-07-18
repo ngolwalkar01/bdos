@@ -53,5 +53,23 @@ class DiscoveryRepository:
         payload=[{"user_id":self.user_id,"discovery_run_id":run_id,**item} for item in candidates]
         return self.client.table("discovery_candidates").upsert(payload,on_conflict="user_id,source,source_url").execute().data or []
 
+    def pending_candidates(self, limit=5):
+        response=(self.client.table("discovery_candidates").select("id,source,source_url,title,snippet,raw_data")
+            .eq("user_id",self.user_id).eq("status","pending").order("created_at",desc=True).limit(limit).execute())
+        return response.data or []
+
+    def save_candidate_research(self, candidate_id, status, profile, evidence, error, researched_at):
+        response=self.client.table("candidate_research_profiles").upsert({"candidate_id":candidate_id,"status":status,"profile":profile,"evidence":evidence,"error_message":error,"researched_at":researched_at},on_conflict="candidate_id").execute()
+        return response.data or []
+
+    def set_candidate_status(self, candidate_id, status, classification):
+        response=self.client.table("discovery_candidates").update({"status":status,"classification":classification}).eq("id",candidate_id).eq("user_id",self.user_id).execute()
+        return response.data or []
+
+    def candidate_overview(self):
+        response=self.client.table("discovery_candidates").select("status").eq("user_id",self.user_id).execute()
+        rows=response.data or []
+        return {"pending":sum(x.get("status")=="pending" for x in rows),"rejected":sum(x.get("status")=="rejected" for x in rows),"researched":sum(x.get("status")=="promoted" for x in rows)}
+
     def finish_run(self, run_id, status, count, errors):
         return self.client.table("discovery_runs").update({"status":status,"discovered_count":count,"errors":errors,"completed_at":datetime.now(timezone.utc).isoformat()}).eq("id",run_id).execute().data

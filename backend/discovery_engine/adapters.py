@@ -21,7 +21,7 @@ def discover_public_web_candidates(strategy, client, query_limit=5):
         for result in client.search(query=query, search_depth="basic", max_results=5).get("results", []):
             if result.get("url"):
                 title = result.get("title") or "Business opportunity"
-                items.append({"title": title, "source": "Public Web", "source_url": result["url"], "snippet": result.get("content") or "", "raw_data": {"query": query, "search_score": result.get("score")}, "classification": {"reason": "raw_search_candidate", "promotable": False}, "status": "pending"})
+                items.append({"title": title, "source": "Public Web", "source_url": result["url"], "snippet": result.get("content") or "", "raw_data": {"query": query, "search_score": result.get("score")}})
     return items
 
 
