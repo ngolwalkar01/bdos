@@ -1110,7 +1110,7 @@ def render_onboarding(user, openai_client=None):
     if st.button("Log out"):
         st.logout()
 
-def render_dashboard(user):
+def render_dashboard(user, openai_client=None):
     with st.sidebar:
         with st.container(key="sidebar_brand"):
             brand_wordmark()
@@ -1138,7 +1138,7 @@ def render_dashboard(user):
     if selected == "Home":
         render_home(user)
     elif selected == "Discover":
-        render_discover(user)
+        render_discover(user, openai_client)
     elif selected == "Business DNA":
         render_business_dna(user)
     else:
