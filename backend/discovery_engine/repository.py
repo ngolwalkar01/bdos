@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from services.database import get_database_client
 
 
@@ -32,3 +34,18 @@ class DiscoveryRepository:
         if not response.data:
             raise RuntimeError("The Discovery Strategy could not be saved.")
         return response.data[0]
+
+    def start_run(self, strategy_id, sources):
+        response = self.client.table("discovery_runs").insert({"user_id":self.user_id,"strategy_id":strategy_id,"status":"running","sources":sources,"started_at":datetime.now(timezone.utc).isoformat()}).execute()
+        if not response.data:
+            raise RuntimeError("The discovery run could not be started.")
+        return response.data[0]
+
+    def upsert_opportunities(self, run_id, opportunities):
+        if not opportunities:
+            return []
+        payload=[{"user_id":self.user_id,"discovery_run_id":run_id,**item} for item in opportunities]
+        return self.client.table("opportunities").upsert(payload,on_conflict="user_id,source,source_url").execute().data or []
+
+    def finish_run(self, run_id, status, count, errors):
+        return self.client.table("discovery_runs").update({"status":status,"discovered_count":count,"errors":errors,"completed_at":datetime.now(timezone.utc).isoformat()}).eq("id",run_id).execute().data

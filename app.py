@@ -59,7 +59,7 @@ if auth_enabled():
         st.stop()
 
     if app_user.get("onboarding_completed"):
-        render_dashboard(app_user, client)
+        render_dashboard(app_user, client, tavily_client)
     else:
         render_onboarding(app_user, client)
     st.stop()

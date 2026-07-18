@@ -2,6 +2,7 @@ import streamlit as st
 
 from backend.discovery_engine.repository import DiscoveryRepository
 from backend.discovery_engine.strategy import generate_discovery_strategy
+from backend.discovery_engine.service import run_discovery
 from services.database import get_business_dna_profile
 
 
@@ -40,23 +41,37 @@ def render_home(user, openai_client):
     st.info("Your highest-value opportunities will appear here as discovery runs complete.")
 
 
-def render_opportunities(user, openai_client):
+def render_opportunities(user, openai_client, tavily_client):
     st.markdown('<span class="bdos-eyebrow">Opportunity Feed</span>', unsafe_allow_html=True)
     st.title("Opportunities")
     st.write("Relevant opportunities selected from your Business DNA, preferences, and experience.")
     try:
         repository = DiscoveryRepository(user["id"])
         dna = get_business_dna_profile(user["id"])
-        if not repository.active_strategy():
+        active_strategy = repository.active_strategy()
+        if not active_strategy:
             with st.spinner("Preparing your opportunity discovery profile..."):
-                ensure_strategy(repository, openai_client, dna)
+                active_strategy = ensure_strategy(repository, openai_client, dna)
         opportunities = repository.recent_opportunities()
     except Exception as error:
         st.error("Your opportunity feed could not be prepared.")
         st.code(str(error))
         return
+    if st.button("Find new opportunities", type="primary", use_container_width=True):
+        try:
+            with st.spinner("Searching selected sources and removing duplicates..."):
+                result = run_discovery(repository, active_strategy, tavily_client)
+            if result["errors"]:
+                st.warning(f"Found {result['count']} opportunities. Some sources were unavailable.")
+            else:
+                st.success(f"Found and stored {result['count']} opportunities.")
+            st.rerun()
+        except Exception as error:
+            st.error("Opportunity discovery could not be completed.")
+            st.code(str(error))
+    st.caption("Uses up to 5 public-web searches per run, plus Remotive and RemoteOK feeds.")
     if not opportunities:
-        st.info("Your opportunity feed is ready for multi-source discovery in Phase 2C.")
+        st.info("No opportunities yet. Run discovery to build your personalized feed.")
         return
     for opportunity in opportunities:
         with st.container(border=True):
@@ -66,6 +81,8 @@ def render_opportunities(user, openai_client):
             st.subheader(f"{title}{f' · {score}/100' if score is not None else ''}")
             st.write(opportunity.get("title") or "Opportunity")
             st.caption(f"{opportunity.get('source','')} - {opportunity.get('country') or 'Location unknown'}")
+            if opportunity.get("source_url"):
+                st.link_button(f"View on {opportunity.get('source') or 'source'}", opportunity["source_url"])
 
 
 def render_business_dna(user):
