@@ -5,6 +5,7 @@ from backend.discovery_engine.strategy import generate_discovery_strategy
 from backend.discovery_engine.service import run_discovery
 from backend.research_engine.service import research_candidates
 from backend.qualification_engine.candidate import qualify_researched_candidates
+from backend.scoring_engine.service import score_qualified_opportunities
 from services.database import get_business_dna_profile
 
 
@@ -65,6 +66,7 @@ def render_opportunities(user, openai_client, tavily_client):
                 result = run_discovery(repository, active_strategy, tavily_client, openai_client, dna)
                 research = research_candidates(repository, tavily_client, openai_client, dna, limit=5)
                 qualification_counts = qualify_researched_candidates(repository, openai_client, dna, limit=10)
+                scoring = score_qualified_opportunities(repository)
             if result["errors"]:
                 st.warning(f"Found {result['count']} opportunities. Some sources were unavailable.")
             else:
@@ -76,6 +78,8 @@ def render_opportunities(user, openai_client, tavily_client):
                     f"Private qualification: {qualification_counts['qualified']} qualified, "
                     f"{qualification_counts['needs_review']} need review, and {qualification_counts['rejected']} rejected."
                 )
+            if scoring["scored"]:
+                st.caption(f"Scored and ranked {scoring['scored']} qualified opportunities.")
             st.rerun()
         except Exception as error:
             st.error("Opportunity discovery could not be completed.")
@@ -87,7 +91,8 @@ def render_opportunities(user, openai_client, tavily_client):
     for opportunity in opportunities:
         with st.container(border=True):
             scores = opportunity.get("opportunity_scores") or []
-            score = scores[0].get("score") if scores else None
+            score_record = scores[0] if scores else {}
+            score = score_record.get("score")
             title = opportunity.get("company_name") or "Unknown company"
             st.subheader(f"{title}{f' · {score}/100' if score is not None else ''}")
             st.write(opportunity.get("title") or "Opportunity")
@@ -98,6 +103,22 @@ def render_opportunities(user, openai_client, tavily_client):
                 st.markdown(f"**Business DNA fit: {qualification.get('fit_score', qualification.get('score', 0))}/100**")
                 for reason in qualification.get("fit_reasons", qualification.get("reasons", [])):
                     st.write(f"✓ {reason}")
+            if score_record.get("confidence"):
+                st.caption(f"Ranking confidence: {score_record['confidence'].title()}")
+                with st.expander("Why this ranks here"):
+                    breakdown = score_record.get("breakdown") or {}
+                    for label, key in (
+                        ("Business DNA fit", "business_dna_fit"),
+                        ("Opportunity strength", "opportunity_strength"),
+                        ("Evidence quality", "evidence_quality"),
+                        ("Urgency", "urgency"),
+                        ("Commercial fit", "commercial_fit"),
+                    ):
+                        st.write(f"{label}: {breakdown.get(key, 0)} points")
+                    for signal in score_record.get("positive_signals") or []:
+                        st.write(f"? {signal}")
+                    for risk in score_record.get("risk_signals") or []:
+                        st.write(f"Risk: {risk}")
             if opportunity.get("source_url"):
                 st.link_button(f"View on {opportunity.get('source') or 'source'}", opportunity["source_url"])
 

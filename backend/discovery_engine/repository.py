@@ -16,9 +16,25 @@ class DiscoveryRepository:
         return {"total":len(rows),"new":sum(x.get("status")=="new" for x in rows),"saved":sum(x.get("status")=="saved" for x in rows),"ignored":sum(x.get("status")=="ignored" for x in rows)}
 
     def recent_opportunities(self, limit=12):
-        response = (self.client.table("opportunities").select("*,opportunity_scores(score,confidence)")
-            .eq("user_id",self.user_id).in_("status", ["saved","qualified"]).neq("source","Public Web").order("discovered_at",desc=True).limit(limit).execute())
-        return response.data or []
+        response = (self.client.table("opportunities").select("*,opportunity_scores(score,confidence,breakdown,positive_signals,risk_signals)")
+            .eq("user_id",self.user_id).in_("status", ["saved","qualified"]).neq("source","Public Web").execute())
+        rows = response.data or []
+        rows.sort(key=lambda item: (
+            (item.get("opportunity_scores") or [{}])[0].get("score", -1),
+            item.get("discovered_at") or "",
+        ), reverse=True)
+        return rows[:limit]
+
+    def opportunities_for_scoring(self, engine_version, limit=100):
+        response = (self.client.table("opportunities").select("*,opportunity_scores(engine_version)")
+            .eq("user_id", self.user_id).eq("status", "qualified").neq("source", "Public Web")
+            .order("discovered_at", desc=True).limit(limit).execute())
+        return [row for row in (response.data or []) if not (row.get("opportunity_scores") or [])
+            or row["opportunity_scores"][0].get("engine_version") != engine_version]
+
+    def save_opportunity_score(self, opportunity_id, score):
+        payload = {"opportunity_id": opportunity_id, **score}
+        return self.client.table("opportunity_scores").upsert(payload, on_conflict="opportunity_id").execute().data or []
 
     def active_strategy(self):
         response = (self.client.table("discovery_strategies").select("*").eq("user_id",self.user_id)
