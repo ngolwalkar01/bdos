@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from services.database import get_database_client
+from backend.learning_engine.feedback import build_feedback
 
 
 class DiscoveryRepository:
@@ -15,9 +16,10 @@ class DiscoveryRepository:
         rows = response.data or []
         return {"total":len(rows),"new":sum(x.get("status")=="new" for x in rows),"saved":sum(x.get("status")=="saved" for x in rows),"ignored":sum(x.get("status")=="ignored" for x in rows)}
 
-    def recent_opportunities(self, limit=12):
+    def recent_opportunities(self, statuses=None, limit=12):
+        statuses = statuses or ["qualified"]
         response = (self.client.table("opportunities").select("*,opportunity_scores(score,confidence,breakdown,positive_signals,risk_signals)")
-            .eq("user_id",self.user_id).in_("status", ["saved","qualified"]).neq("source","Public Web").execute())
+            .eq("user_id",self.user_id).in_("status", statuses).neq("source","Public Web").execute())
         rows = response.data or []
         rows.sort(key=lambda item: (
             (item.get("opportunity_scores") or [{}])[0].get("score", -1),
@@ -35,6 +37,20 @@ class DiscoveryRepository:
     def save_opportunity_score(self, opportunity_id, score):
         payload = {"opportunity_id": opportunity_id, **score}
         return self.client.table("opportunity_scores").upsert(payload, on_conflict="opportunity_id").execute().data or []
+
+    def set_opportunity_feedback(self, opportunity_id, action, reason=None, details=None):
+        feedback = build_feedback(opportunity_id, self.user_id, action, reason, details)
+        status = {"saved": "saved", "not_relevant": "ignored", "restored": "qualified"}[action]
+        owned = (self.client.table("opportunities").select("id")
+            .eq("id", opportunity_id).eq("user_id", self.user_id).limit(1).execute())
+        if not owned.data:
+            raise RuntimeError("The opportunity could not be found.")
+        self.client.table("opportunity_feedback").insert(feedback).execute()
+        response = (self.client.table("opportunities").update({"status": status})
+            .eq("id", opportunity_id).eq("user_id", self.user_id).execute())
+        if not response.data:
+            raise RuntimeError("The opportunity could not be updated.")
+        return response.data[0]
 
     def active_strategy(self):
         response = (self.client.table("discovery_strategies").select("*").eq("user_id",self.user_id)
@@ -60,7 +76,14 @@ class DiscoveryRepository:
     def upsert_opportunities(self, run_id, opportunities):
         if not opportunities:
             return []
-        payload=[{"user_id":self.user_id,"discovery_run_id":run_id,**item} for item in opportunities]
+        protected = (self.client.table("opportunities").select("source,source_url,status")
+            .eq("user_id", self.user_id).in_("status", ["saved", "ignored"]).execute())
+        statuses = {(row["source"].lower(), row["source_url"].rstrip("/").lower()): row["status"] for row in (protected.data or [])}
+        payload=[]
+        for item in opportunities:
+            key = (item["source"].lower(), item["source_url"].rstrip("/").lower())
+            payload.append({"user_id":self.user_id,"discovery_run_id":run_id,**item,
+                "status": statuses.get(key, item.get("status", "new"))})
         return self.client.table("opportunities").upsert(payload,on_conflict="user_id,source,source_url").execute().data or []
 
     def upsert_candidates(self, run_id, candidates):

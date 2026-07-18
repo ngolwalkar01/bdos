@@ -9,6 +9,19 @@ from backend.scoring_engine.service import score_qualified_opportunities
 from services.database import get_business_dna_profile
 
 
+FEEDBACK_REASONS = {
+    "Wrong skill match": "wrong_skill",
+    "Wrong industry": "wrong_industry",
+    "Wrong opportunity type": "wrong_opportunity_type",
+    "Location mismatch": "location_mismatch",
+    "Budget mismatch": "budget_mismatch",
+    "Evidence is too weak": "weak_evidence",
+    "Not an actual opportunity": "not_an_opportunity",
+    "Opportunity is already closed": "already_closed",
+    "Other": "other",
+}
+
+
 def ensure_strategy(repository, client, dna):
     active = repository.active_strategy()
     if active:
@@ -48,6 +61,7 @@ def render_opportunities(user, openai_client, tavily_client):
     st.markdown('<span class="bdos-eyebrow">Opportunity Feed</span>', unsafe_allow_html=True)
     st.title("Opportunities")
     st.write("Relevant opportunities selected from your Business DNA, preferences, and experience.")
+    view = st.radio("Opportunity view", ["For you", "Saved"], horizontal=True, label_visibility="collapsed")
     try:
         repository = DiscoveryRepository(user["id"])
         dna = get_business_dna_profile(user["id"])
@@ -55,7 +69,8 @@ def render_opportunities(user, openai_client, tavily_client):
         if not active_strategy:
             with st.spinner("Preparing your opportunity discovery profile..."):
                 active_strategy = ensure_strategy(repository, openai_client, dna)
-        opportunities = repository.recent_opportunities()
+        statuses = ["saved"] if view == "Saved" else ["qualified"]
+        opportunities = repository.recent_opportunities(statuses=statuses)
     except Exception as error:
         st.error("Your opportunity feed could not be prepared.")
         st.code(str(error))
@@ -86,7 +101,10 @@ def render_opportunities(user, openai_client, tavily_client):
             st.code(str(error))
     st.caption("Only direct listings that pass strict Business DNA qualification at 80+ are shown. Raw web candidates are researched privately.")
     if not opportunities:
-        st.info("No opportunities yet. Run discovery to build your personalized feed.")
+        if view == "Saved":
+            st.info("You have not saved any opportunities yet.")
+        else:
+            st.info("No opportunities yet. Run discovery to build your personalized feed.")
         return
     for opportunity in opportunities:
         with st.container(border=True):
@@ -119,8 +137,39 @@ def render_opportunities(user, openai_client, tavily_client):
                         st.write(f"? {signal}")
                     for risk in score_record.get("risk_signals") or []:
                         st.write(f"Risk: {risk}")
+            action_columns = st.columns([2, 1, 1])
             if opportunity.get("source_url"):
-                st.link_button(f"View on {opportunity.get('source') or 'source'}", opportunity["source_url"])
+                action_columns[0].link_button(
+                    f"View on {opportunity.get('source') or 'source'}", opportunity["source_url"],
+                    use_container_width=True,
+                )
+            if opportunity.get("status") == "saved":
+                if action_columns[1].button("Return to feed", key=f"restore_{opportunity['id']}", use_container_width=True):
+                    try:
+                        repository.set_opportunity_feedback(opportunity["id"], "restored")
+                        st.rerun()
+                    except Exception as error:
+                        st.error(f"The opportunity could not be restored: {error}")
+            else:
+                if action_columns[1].button("Save", key=f"save_{opportunity['id']}", use_container_width=True):
+                    try:
+                        repository.set_opportunity_feedback(opportunity["id"], "saved")
+                        st.rerun()
+                    except Exception as error:
+                        st.error(f"The opportunity could not be saved: {error}")
+                with action_columns[2].popover("Not relevant", use_container_width=True):
+                    with st.form(key=f"feedback_{opportunity['id']}"):
+                        reason_label = st.selectbox("What was wrong?", list(FEEDBACK_REASONS))
+                        details = st.text_input("Optional detail", max_chars=500)
+                        submitted = st.form_submit_button("Remove opportunity", use_container_width=True)
+                    if submitted:
+                        try:
+                            repository.set_opportunity_feedback(
+                                opportunity["id"], "not_relevant", FEEDBACK_REASONS[reason_label], details
+                            )
+                            st.rerun()
+                        except Exception as error:
+                            st.error(f"Your feedback could not be saved: {error}")
 
 
 def render_business_dna(user):
