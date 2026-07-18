@@ -17,7 +17,7 @@ class DiscoveryRepository:
 
     def recent_opportunities(self, limit=12):
         response = (self.client.table("opportunities").select("*,opportunity_scores(score,confidence)")
-            .eq("user_id",self.user_id).in_("status", ["new","saved","qualified"]).neq("source","Public Web").order("discovered_at",desc=True).limit(limit).execute())
+            .eq("user_id",self.user_id).in_("status", ["saved","qualified"]).neq("source","Public Web").order("discovered_at",desc=True).limit(limit).execute())
         return response.data or []
 
     def active_strategy(self):

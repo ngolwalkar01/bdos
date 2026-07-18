@@ -60,7 +60,7 @@ def render_opportunities(user, openai_client, tavily_client):
     if st.button("Find new opportunities", type="primary", use_container_width=True):
         try:
             with st.spinner("Searching selected sources and removing duplicates..."):
-                result = run_discovery(repository, active_strategy, tavily_client)
+                result = run_discovery(repository, active_strategy, tavily_client, openai_client, dna)
             if result["errors"]:
                 st.warning(f"Found {result['count']} opportunities. Some sources were unavailable.")
             else:
@@ -69,7 +69,7 @@ def render_opportunities(user, openai_client, tavily_client):
         except Exception as error:
             st.error("Opportunity discovery could not be completed.")
             st.code(str(error))
-    st.caption("The feed contains direct listings only. Raw web matches remain private candidates until researched and qualified.")
+    st.caption("Only direct listings that pass strict Business DNA qualification at 80+ are shown.")
     if not opportunities:
         st.info("No opportunities yet. Run discovery to build your personalized feed.")
         return
@@ -81,6 +81,11 @@ def render_opportunities(user, openai_client, tavily_client):
             st.subheader(f"{title}{f' · {score}/100' if score is not None else ''}")
             st.write(opportunity.get("title") or "Opportunity")
             st.caption(f"{opportunity.get('source','')} - {opportunity.get('country') or 'Location unknown'}")
+            qualification = (opportunity.get("raw_data") or {}).get("business_dna_qualification") or {}
+            if qualification:
+                st.markdown(f"**Business DNA fit: {qualification.get('fit_score', 0)}/100**")
+                for reason in qualification.get("fit_reasons", []):
+                    st.write(f"✓ {reason}")
             if opportunity.get("source_url"):
                 st.link_button(f"View on {opportunity.get('source') or 'source'}", opportunity["source_url"])
 
